@@ -1,0 +1,3 @@
+# Keep logs local
+logs/*
+!logs/README.md

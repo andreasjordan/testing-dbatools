@@ -76,7 +76,7 @@ $progressStart = Get-Date
 foreach ($test in $tests) {
     # $test = $tests[0]
 
-    $progressParameter.Status = "$progressCompleted of $progressTotal tests completed"
+    $progressParameter.Status = "$progressCompleted of $progressTotal tests completed ($sleepingProcs1 / $sleepingProcs2 / $sleepingProcs3 / $usedMemory MB / $startMemory MB)"
     $progressParameter.CurrentOperation = "processing $($test.Name)"
     $progressParameter.PercentComplete = $progressCompleted * 100 / $progressTotal
     if ($progressParameter.PercentComplete -gt 0) {
@@ -115,9 +115,11 @@ foreach ($test in $tests) {
 
     Clear-DbaConnectionPool
 
-    $sleepingProcs1 = (Get-DbaProcess -SqlInstance $TestConfig.instance1 | Where-Object { $_.Program -match 'dbatools' -and $_.Status -eq 'sleeping' }).Count
-    $sleepingProcs2 = (Get-DbaProcess -SqlInstance $TestConfig.instance2 | Where-Object { $_.Program -match 'dbatools' -and $_.Status -eq 'sleeping' }).Count
-    $sleepingProcs3 = (Get-DbaProcess -SqlInstance $TestConfig.instance3 | Where-Object { $_.Program -match 'dbatools' -and $_.Status -eq 'sleeping' }).Count
+    [int]$sleepingProcs1 = (Get-DbaProcess -SqlInstance $TestConfig.instance1 | Where-Object { $_.Program -match 'dbatools' -and $_.Status -eq 'sleeping' }).Count
+    [int]$sleepingProcs2 = (Get-DbaProcess -SqlInstance $TestConfig.instance2 | Where-Object { $_.Program -match 'dbatools' -and $_.Status -eq 'sleeping' }).Count
+    [int]$sleepingProcs3 = (Get-DbaProcess -SqlInstance $TestConfig.instance3 | Where-Object { $_.Program -match 'dbatools' -and $_.Status -eq 'sleeping' }).Count
+    
+    Remove-DbaDbBackupRestoreHistory -SqlInstance $TestConfig.instance1, $TestConfig.instance2, $TestConfig.instance3 -KeepDays -1 -Confirm:$false
 
     Write-Host "`n$((Get-Date).ToString('HH:mm:ss')) ========= $sleepingProcs1 / $sleepingProcs2 / $sleepingProcs3 / $usedMemory MB / $([int]([System.GC]::GetTotalMemory($false)/1MB)) MB ==========`n"
 

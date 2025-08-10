@@ -3,7 +3,8 @@ param(
     [int]$NumberOfTestsToSkip = 0,
     [string]$CommandToStartWith,
     [switch]$ContinueOnFailure,
-    [switch]$SkipEnvironmentTest
+    [switch]$SkipEnvironmentTest,
+    [switch]$TestForWarnings
 )
 
 $ErrorActionPreference = 'Stop'
@@ -33,6 +34,28 @@ $TestConfig = Get-TestConfig -LocalConfigPath $configFile
 $tests = Get-ChildItem -Path "$dbatoolsBase\tests\*-Dba*.Tests.ps1" | Sort-Object -Property Name
 
 $skipTests = @(
+    # Take more than one minute:
+    'Remove-DbaDbTableData.Tests.ps1'
+    'Get-DbaDbBackupHistory.Tests.ps1'
+    'Start-DbaMigration.Tests.ps1'
+    'Copy-DbaDatabase.Tests.ps1'
+    'Install-DbaFirstResponderKit.Tests.ps1'
+    'Test-DbaLastBackup.Tests.ps1'
+    'Update-DbaInstance.Tests.ps1'
+    'Backup-DbaDatabase.Tests.ps1'
+    'Install-DbaSqlWatch.Tests.ps1'
+    'Update-DbaServiceAccount.Tests.ps1'
+    'Uninstall-DbaSqlWatch.Tests.ps1'
+    'Install-DbaDarlingData.Tests.ps1'
+    'Restore-DbaDatabase.Tests.ps1'
+    # Use more than 200 MB of memory:
+    'Set-DbaAgentServer.Tests.ps1'
+    'Set-DbaExtendedProtection.Tests.ps1'
+    'Get-DbaExecutionPlan.Tests.ps1'
+    'Update-DbaInstance.Tests.ps1'
+    # Fail sometimes and need refactoring:
+    'Remove-DbaDatabaseSafely.Tests.ps1'
+    # Over problems:
     'Invoke-DbaDbMirroring.Tests.ps1'  # "the partner server name must be distinct"
     'Watch-DbaDbLogin.Tests.ps1'       # Command does not work
     'Get-DbaWindowsLog.Tests.ps1'      # Sometimes failes (gets no data), sometimes takes forever
@@ -61,6 +84,7 @@ if ($CommandToStartWith) {
         $tests = $tests[$commandIndex..($tests.Count - 1)]
     } else {
         Write-Warning -Message "No test for [$CommandToStartWith] found"
+        break
     }
 }
 
@@ -87,20 +111,39 @@ foreach ($test in $tests) {
     $failure = $false
     $startMemory = [int]([System.GC]::GetTotalMemory($false)/1MB)
 
+    $warningsFile = "$logPath\$($test.Name).warnings.txt"
     if ((Get-Content -Path $test.FullName)[0] -match 'Requires.*Pester.*5') { 
-        $resultTest = Invoke-Pester -Path $test.FullName -Output Detailed -PassThru
+        if ($TestForWarnings) {
+            $resultTest = Invoke-Pester -Path $test.FullName -Output Detailed -PassThru 3> $warningsFile
+        } else {
+            $resultTest = Invoke-Pester -Path $test.FullName -Output Detailed -PassThru
+        }
         if ($resultTest.FailedCount -gt 0) {
             $failure = $true
         }
     } else {
         Remove-Module -Name Pester
         Import-Module -Name Pester -MaximumVersion 4.99
-        $resultTest = Invoke-Pester -Script $test.FullName -Show All -PassThru
+        if ($TestForWarnings) {
+            $warningsFile = "$logPath\$($test.Name).warnings.txt"
+            $resultTest = Invoke-Pester -Script $test.FullName -Show All -PassThru 3> $warningsFile
+        } else {
+            $resultTest = Invoke-Pester -Script $test.FullName -Show All -PassThru
+        }
         if ($resultTest.FailedCount -gt 0) {
             $failure = $true
         }
         Remove-Module -Name Pester
         Import-Module -Name Pester -MinimumVersion 5.0
+    }
+    if ($TestForWarnings) {
+        $warnings = Get-Content -Path $warningsFile
+        if ($warnings) {
+            $warnings | ForEach-Object { Write-Warning -Message $_ }
+            $failure = $true
+        } else {
+            Remove-Item -Path $warningsFile
+        }
     }
 
     $usedMemory = [int]([System.GC]::GetTotalMemory($false)/1MB) - $startMemory

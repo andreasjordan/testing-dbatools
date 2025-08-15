@@ -28,14 +28,22 @@ foreach ($instance in $sqlInstance) {
         continue
     }
     Write-Host "[$([datetime]::Now.ToString('HH:mm:ss'))] Starting uninstall of $instance"
-    $result = Install-DbaInstance @instanceParams -SqlInstance $instance
+    $result = Install-DbaInstance @instanceParams -SqlInstance $instance -WarningVariable WarnVar
     Write-Host "[$([datetime]::Now.ToString('HH:mm:ss'))] Finished uninstall of $instance"
+    if ($WarnVar -match 'pending a reboot') {
+        Write-Warning -Message "[$([datetime]::Now.ToString('HH:mm:ss'))] Restart needed"
+		Restart-Computer -Force -Confirm
+		return
+    }
     if ($result.Successful -ne $true) {
         $result
-        throw "[$([datetime]::Now.ToString('HH:mm:ss'))] Uninstallation failed"
+        Write-Warning -Message "[$([datetime]::Now.ToString('HH:mm:ss'))] Uninstallation failed"
+		return
     }
     if ($result.Notes -match 'restart') {
-        throw "[$([datetime]::Now.ToString('HH:mm:ss'))] Restart needed"
+        Write-Warning -Message "[$([datetime]::Now.ToString('HH:mm:ss'))] Restart needed"
+		Restart-Computer -Force -Confirm
+		return
     }
 }
 

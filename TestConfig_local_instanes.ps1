@@ -8,10 +8,15 @@ $config['host2'] = 'SQL2022'      # Replace with your secondary server for tests
 
 $config['InstanceConfiguration'] = [ordered]@{
     Version          = 2022
-    SourcePath       = '\\dc\FileServer\SQLServer2022'
-    UpdateSourcePath = '\\dc\FileServer\SQLServerCU'
 }
-
+if (Test-Path -Path 'C:\SQLServerFull') {
+    # We are on an Azure virtual maschine with preinstalled SQL Server
+    $config['InstanceConfiguration'].SourcePath = 'C:\SQLServerFull'
+} elseif (Test-Path -Path '\\dc\FileServer\Software\SQLServer\ISO\SQLServer2022') {
+    # We are on personal setup of Andreas Jordan
+    $config['InstanceConfiguration'].SourcePath = '\\dc\FileServer\Software\SQLServer\ISO\SQLServer2022'
+    $config['InstanceConfiguration'].UpdateSourcePath = '\\dc\FileServer\Software\SQLServer\CU'
+}
 
 # Configuration items from constants.local.ps1.example:
 

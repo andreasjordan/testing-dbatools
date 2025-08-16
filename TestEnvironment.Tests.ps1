@@ -9,9 +9,9 @@ BeforeDiscovery {
 }
 
 Describe "the temporary files" {
-    #It "Has no files in legacy temp folder" {
-    #    Get-ChildItem -Path C:\Temp | Should -BeNullOrEmpty
-    #}
+    It -Skip:($TestConfig.Temp -eq 'C:\Temp') "Has no files in legacy temp folder" {
+        Get-ChildItem -Path C:\Temp | Should -BeNullOrEmpty
+    }
 
     It "Has no files in new temp folder" {
         Get-ChildItem -Path $TestConfig.Temp | Should -BeNullOrEmpty
@@ -54,11 +54,11 @@ Describe "the instance <_>" -ForEach $instance {
     }
 
     It "Has the correct TCP port configured" {
-        if ($PSItem -eq 'CLIENT') {
+        if ($PSItem -eq $TestConfig.instance1) {
             $configTcpPort = 1433
-        } elseif ($PSItem -eq 'CLIENT\SQLInstance2') {
+        } elseif ($PSItem -eq $TestConfig.instance2) {
             $configTcpPort = 14333
-        } elseif ($PSItem -eq 'CLIENT\SQLInstance3') {
+        } elseif ($PSItem -eq $TestConfig.instance3) {
             $configTcpPort = 14334
         }
 
@@ -66,11 +66,11 @@ Describe "the instance <_>" -ForEach $instance {
     }
 
     It "Has the correct Hadr setting" {
-        if ($PSItem -eq 'CLIENT') {
+        if ($PSItem -eq $TestConfig.instance1) {
             $targeIsHadrEnabled = $false
-        } elseif ($PSItem -eq 'CLIENT\SQLInstance2') {
+        } elseif ($PSItem -eq $TestConfig.instance2) {
             $targeIsHadrEnabled = $true
-        } elseif ($PSItem -eq 'CLIENT\SQLInstance3') {
+        } elseif ($PSItem -eq $TestConfig.instance3) {
             $targeIsHadrEnabled = $true
         }
 
@@ -78,10 +78,10 @@ Describe "the instance <_>" -ForEach $instance {
     }
 
     It "Has a certificate (if needed)" {
-        if ($PSItem -eq 'CLIENT\SQLInstance3') {
+        if ($PSItem -eq $TestConfig.instance3) {
             $server.Databases['master'].Certificates | Where-Object Name -eq 'dbatoolsci_AGCert' | Should -Not -BeNullOrEmpty
         }
-        if ($PSItem -ne 'CLIENT\SQLInstance3') {
+        if ($PSItem -ne $TestConfig.instance3) {
             $server.Databases['master'].Certificates | Where-Object Name -eq 'dbatoolsci_AGCert' | Should -BeNullOrEmpty
         }
     }

@@ -18,16 +18,17 @@ $sqlInstance = $TestConfig.instance1, $TestConfig.instance2, $TestConfig.instanc
 $instanceParams = @{
     Version            = $TestConfig.InstanceConfiguration.Version
     Path               = $TestConfig.InstanceConfiguration.SourcePath
-    UpdateSourcePath   = $TestConfig.InstanceConfiguration.UpdateSourcePath
     Feature            = 'Engine'
     IFI                = $true
     Configuration      = @{
         SqlMaxMemory = '1024'
-        #NpEnabled    = 1
     }
     AuthenticationMode = 'Mixed'
     SaCredential       = $TestConfig.SqlCred
     EnableException    = $false
+}
+if ($TestConfig.InstanceConfiguration.UpdateSourcePath) {
+    $instanceParams.UpdateSourcePath = $TestConfig.InstanceConfiguration.UpdateSourcePath
 }
 
 foreach ($instance in $sqlInstance) {
@@ -55,15 +56,15 @@ foreach ($instance in $sqlInstance) {
     }
 }
 
-$null = Set-DbaSpConfigure -SqlInstance $sqlInstance -SqlCredential $TestConfig.SqlCred -Name IsSqlClrEnabled -Value $true
-$null = Set-DbaSpConfigure -SqlInstance $sqlInstance -SqlCredential $TestConfig.SqlCred -Name ClrStrictSecurity -Value $false
+$null = Set-DbaSpConfigure -SqlInstance $sqlInstance -Name IsSqlClrEnabled -Value $true
+$null = Set-DbaSpConfigure -SqlInstance $sqlInstance -Name ClrStrictSecurity -Value $false
 
-$null = Set-DbaSpConfigure -SqlInstance $sqlInstance[1, 2] -SqlCredential $TestConfig.SqlCred -Name ExtensibleKeyManagementEnabled -Value $true
-Invoke-DbaQuery -SqlInstance $sqlInstance[1, 2] -SqlCredential $TestConfig.SqlCred -Query "CREATE CRYPTOGRAPHIC PROVIDER dbatoolsci_AKV FROM FILE = '$($TestConfig.appveyorlabrepo)\keytests\ekm\Microsoft.AzureKeyVaultService.EKM.dll'"
+$null = Set-DbaSpConfigure -SqlInstance $sqlInstance[1, 2] -Name ExtensibleKeyManagementEnabled -Value $true
+Invoke-DbaQuery -SqlInstance $sqlInstance[1, 2] -Query "CREATE CRYPTOGRAPHIC PROVIDER dbatoolsci_AKV FROM FILE = '$($TestConfig.appveyorlabrepo)\keytests\ekm\Microsoft.AzureKeyVaultService.EKM.dll'"
 $null = Enable-DbaAgHadr -SqlInstance $sqlInstance[1, 2] -Force
 
-Invoke-DbaQuery -SqlInstance $sqlInstance[2] -SqlCredential $TestConfig.SqlCred -Query "CREATE MASTER KEY ENCRYPTION BY PASSWORD = '<StrongPassword>'"
-Invoke-DbaQuery -SqlInstance $sqlInstance[2] -SqlCredential $TestConfig.SqlCred -Query "CREATE CERTIFICATE dbatoolsci_AGCert WITH SUBJECT = 'AG Certificate'"
+Invoke-DbaQuery -SqlInstance $sqlInstance[2] -Query "CREATE MASTER KEY ENCRYPTION BY PASSWORD = '<StrongPassword>'"
+Invoke-DbaQuery -SqlInstance $sqlInstance[2] -Query "CREATE CERTIFICATE dbatoolsci_AGCert WITH SUBJECT = 'AG Certificate'"
 
 $null = Set-DbaNetworkConfiguration -SqlInstance $sqlInstance[1] -StaticPortForIPAll 14333 -RestartService
 $null = Set-DbaNetworkConfiguration -SqlInstance $sqlInstance[2] -StaticPortForIPAll 14334 -RestartService

@@ -4,7 +4,8 @@ param(
     [string]$CommandToStartWith,
     [switch]$ContinueOnFailure,
     [switch]$SkipEnvironmentTest,
-    [switch]$TestForWarnings
+    [switch]$TestForWarnings,
+    [string]$StatusUrl
 )
 
 $ErrorActionPreference = 'Stop'
@@ -18,6 +19,32 @@ $configFile = "$testingBase\TestConfig_local_instanes.ps1"
 $logPath    = "$testingBase\logs"
 
 $resultsFileName = "$logPath\results_$([datetime]::Now.ToString('yyyMMdd_HHmmss')).txt"
+
+
+
+function Send-Status {
+    Param([string]$Message)
+    if ($StatusUrl) {
+        $requestParams = @{
+            Uri             = $StatusUrl
+            Method          = 'Post'
+            ContentType     = 'application/json'
+            Body            = @{
+                IP      = '127.0.0.1'
+                Host    = 'localhost'
+                Message = $Message
+            } | ConvertTo-Json -Compress
+            UseBasicParsing = $true
+        }
+        try {
+            $null = Invoke-WebRequest @requestParams
+        } catch {
+            Write-Warning -Message "Failed to send status: $_"
+        }
+    }
+}
+
+
 
 
 $start = Get-Date
@@ -34,7 +61,7 @@ $TestConfig = Get-TestConfig -LocalConfigPath $configFile
 $tests = Get-ChildItem -Path "$dbatoolsBase\tests\*-Dba*.Tests.ps1" | Sort-Object -Property Name
 
 $skipTests = @(
-    # Take more than one minute:
+    <# Take more than one minute:
     'Remove-DbaDbTableData.Tests.ps1'
     'Get-DbaDbBackupHistory.Tests.ps1'
     'Start-DbaMigration.Tests.ps1'
@@ -53,9 +80,15 @@ $skipTests = @(
     'Set-DbaExtendedProtection.Tests.ps1'
     'Get-DbaExecutionPlan.Tests.ps1'
     'Update-DbaInstance.Tests.ps1'
+    #>
     # Fail sometimes and need refactoring:
     'Remove-DbaDatabaseSafely.Tests.ps1'
     # Over problems:
+	# Remove-DbaDbMailAccount has warnings output
+	# Set-DbaAgentServer has warnings output
+	# Start-DbaMigration
+	'Restore-DbaDatabase.Tests.ps1'       # Need a lot of care, skipping for now
+	'New-DbaXESmartTableWriter.Tests.ps1' #  FileNotFoundException: Could not load file or assembly 'Microsoft.SqlServer.XEvent.Linq.dll' or one of its dependencies. (line 60 at GetType())
     'Invoke-DbaDbMirroring.Tests.ps1'  # "the partner server name must be distinct"
     'Watch-DbaDbLogin.Tests.ps1'       # Command does not work
     'Get-DbaWindowsLog.Tests.ps1'      # Sometimes failes (gets no data), sometimes takes forever
@@ -189,8 +222,10 @@ foreach ($test in $tests) {
     $progressCompleted++
 
     if ($failure -and -not $ContinueOnFailure) {
+        Send-Status -Message "TEST FAILED: $($test.Name)"
         break
     }
+    Send-Status -Message "Test $progressCompleted of $progressTotal ok: $($test.Name)"
 }
 Write-Progress @progressParameter -Completed
 

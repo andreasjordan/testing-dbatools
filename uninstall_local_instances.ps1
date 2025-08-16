@@ -7,11 +7,12 @@ $testingBase = "$githubBase\testing-dbatools"
 
 $configFile = "$testingBase\TestConfig_local_instanes.ps1"
 
-Import-Module -Name "$dbatoolsBase\dbatools.psm1" -Force
+Import-Module -Name dbatools
 $PSDefaultParameterValues['*-Dba*:EnableException'] = $true
 $PSDefaultParameterValues['*-Dba*:Confirm'] = $false
 $null = Set-DbatoolsInsecureConnection
 
+. "$dbatoolsBase\private\testing\Get-TestConfig.ps1"
 $TestConfig = Get-TestConfig -LocalConfigPath $configFile
 $sqlInstance = $TestConfig.instance1, $TestConfig.instance2, $TestConfig.instance3
 

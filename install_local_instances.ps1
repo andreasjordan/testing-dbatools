@@ -31,6 +31,14 @@ $instanceParams = @{
 if ($TestConfig.InstanceConfiguration.UpdateSourcePath) {
     $instanceParams.UpdateSourcePath = $TestConfig.InstanceConfiguration.UpdateSourcePath
 }
+if (Test-Path -Path 'C:\SQLServerFull') {
+    # We are on an Azure virtual maschine with preinstalled SQL Server
+    $server = Connect-DbaInstance -SqlInstance $sqlInstance[0]
+    $server.LoginMode = 'Mixed'
+    $server.Alter()
+    $null = Restart-DbaService -SqlInstance $sqlInstance[0] -Type Engine -Force
+    $null = Set-DbaLogin -SqlInstance $sqlInstance[0] -Login sa -Enable
+}
 
 foreach ($instance in $sqlInstance) {
     # $instance = $sqlInstance[0]

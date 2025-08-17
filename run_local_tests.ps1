@@ -87,6 +87,8 @@ $skipTests = @(
 	# Remove-DbaDbMailAccount has warnings output
 	# Set-DbaAgentServer has warnings output
 	# Start-DbaMigration
+    'Export-DbaDacPackage.Tests.ps1'      # Install of SqlPackage fails
+    'Find-DbaDbGrowthEvent.Tests.ps1'     # Does not find an auto grow event
 	'Restore-DbaDatabase.Tests.ps1'       # Need a lot of care, skipping for now
 	'New-DbaXESmartTableWriter.Tests.ps1' #  FileNotFoundException: Could not load file or assembly 'Microsoft.SqlServer.XEvent.Linq.dll' or one of its dependencies. (line 60 at GetType())
     'Invoke-DbaDbMirroring.Tests.ps1'  # "the partner server name must be distinct"

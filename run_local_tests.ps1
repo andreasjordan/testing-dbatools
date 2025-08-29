@@ -51,61 +51,17 @@ $start = Get-Date
 
 Import-Module -Name "$dbatoolsBase\dbatools.psm1" -Force
 $null = Set-DbatoolsInsecureConnection
-#Set-DbatoolsConfig -FullName 'sql.connection.nonpooled' -Value $true
-
-# For the pester4 tests the configFile needs to be copied
-Copy-Item -Path $configFile -Destination "$dbatoolsBase\tests\constants.local.ps1"
 
 $TestConfig = Get-TestConfig -LocalConfigPath $configFile
 
-$tests = Get-ChildItem -Path "$dbatoolsBase\tests\*-Dba*.Tests.ps1" | Sort-Object -Property Name
+$tests = Get-ChildItem -Path "$dbatoolsBase\tests\*-Dba*.Tests.ps1" | Sort-Object -Property Name -Descending
 
 $skipTests = @(
-    <# Take more than one minute:
-    'Remove-DbaDbTableData.Tests.ps1'
-    'Get-DbaDbBackupHistory.Tests.ps1'
-    'Start-DbaMigration.Tests.ps1'
-    'Copy-DbaDatabase.Tests.ps1'
-    'Install-DbaFirstResponderKit.Tests.ps1'
-    'Test-DbaLastBackup.Tests.ps1'
-    'Update-DbaInstance.Tests.ps1'
-    'Backup-DbaDatabase.Tests.ps1'
-    'Install-DbaSqlWatch.Tests.ps1'
-    'Update-DbaServiceAccount.Tests.ps1'
-    'Uninstall-DbaSqlWatch.Tests.ps1'
-    'Install-DbaDarlingData.Tests.ps1'
-    'Restore-DbaDatabase.Tests.ps1'
-    # Use more than 200 MB of memory:
-    'Set-DbaAgentServer.Tests.ps1'
-    'Set-DbaExtendedProtection.Tests.ps1'
-    'Get-DbaExecutionPlan.Tests.ps1'
-    'Update-DbaInstance.Tests.ps1'
-    #>
-    # Fail sometimes and need refactoring:
-    'Remove-DbaDatabaseSafely.Tests.ps1'
-    # Over problems:
-	# Remove-DbaDbMailAccount has warnings output
-	# Set-DbaAgentServer has warnings output
-	# Start-DbaMigration
-    'Export-DbaDacPackage.Tests.ps1'      # Install of SqlPackage fails
-    'Find-DbaDbGrowthEvent.Tests.ps1'     # Does not find an auto grow event
-	'Restore-DbaDatabase.Tests.ps1'       # Need a lot of care, skipping for now
-	'New-DbaXESmartTableWriter.Tests.ps1' #  FileNotFoundException: Could not load file or assembly 'Microsoft.SqlServer.XEvent.Linq.dll' or one of its dependencies. (line 60 at GetType())
-    'Invoke-DbaDbMirroring.Tests.ps1'  # "the partner server name must be distinct"
-    'Watch-DbaDbLogin.Tests.ps1'       # Command does not work
-    'Get-DbaWindowsLog.Tests.ps1'      # Sometimes failes (gets no data), sometimes takes forever
-    'Get-DbaPageFileSetting.Tests.ps1' # Classes Win32_PageFile and Win32_PageFileSetting do not return any information
-    'New-DbaSsisCatalog.Tests.ps1'     # needs an SSIS server
-    'Get-DbaClientProtocol.Tests.ps1'  # No ComputerManagement Namespace on CLIENT.dom.local
 )
 $tests = $tests | Where-Object Name -notin $skipTests
 
 if ($PSVersionTable.PSVersion.Major -gt 5) {
     $skipTests = @(
-        'Add-DbaComputerCertificate.Tests.ps1'    # does not work on pwsh because of X509Certificate2
-        'Backup-DbaComputerCertificate.Tests.ps1' # does not work on pwsh because of X509Certificate2
-        'Enable-DbaFilestream.Tests.ps1'          # does not work on pwsh because of WMI-Object not haveing method EnableFilestream
-        'Invoke-DbaQuery.Tests.ps1'               # does not work on pwsh because "DataReader.GetFieldType(0) returned null." with geometry
     )
 }
 $tests = $tests | Where-Object Name -notin $skipTests
@@ -147,31 +103,8 @@ foreach ($test in $tests) {
     $startMemory = [int]([System.GC]::GetTotalMemory($false)/1MB)
 
     $warningsFile = "$logPath\$($test.Name).warnings.txt"
-    if ((Get-Content -Path $test.FullName)[0] -match 'Requires.*Pester.*5') { 
-        if ($TestForWarnings) {
-            $resultTest = Invoke-Pester -Path $test.FullName -Output Detailed -PassThru 3> $warningsFile
-        } else {
-            $resultTest = Invoke-Pester -Path $test.FullName -Output Detailed -PassThru
-        }
-        if ($resultTest.FailedCount -gt 0) {
-            $failure = $true
-        }
-    } else {
-        Remove-Module -Name Pester
-        Import-Module -Name Pester -MaximumVersion 4.99
-        if ($TestForWarnings) {
-            $warningsFile = "$logPath\$($test.Name).warnings.txt"
-            $resultTest = Invoke-Pester -Script $test.FullName -Show All -PassThru 3> $warningsFile
-        } else {
-            $resultTest = Invoke-Pester -Script $test.FullName -Show All -PassThru
-        }
-        if ($resultTest.FailedCount -gt 0) {
-            $failure = $true
-        }
-        Remove-Module -Name Pester
-        Import-Module -Name Pester -MinimumVersion 5.0
-    }
     if ($TestForWarnings) {
+        $resultTest = Invoke-Pester -Path $test.FullName -Output Detailed -PassThru 3> $warningsFile
         $warnings = Get-Content -Path $warningsFile
         if ($warnings) {
             $warnings | ForEach-Object { Write-Warning -Message $_ }
@@ -179,6 +112,11 @@ foreach ($test in $tests) {
         } else {
             Remove-Item -Path $warningsFile
         }
+    } else {
+        $resultTest = Invoke-Pester -Path $test.FullName -Output Detailed -PassThru
+    }
+    if ($resultTest.FailedCount -gt 0) {
+        $failure = $true
     }
 
     $usedMemory = [int]([System.GC]::GetTotalMemory($false)/1MB) - $startMemory
@@ -191,13 +129,13 @@ foreach ($test in $tests) {
         }
     }
 
-    Clear-DbaConnectionPool
+#    Clear-DbaConnectionPool
 
-    [int]$sleepingProcs1 = (Get-DbaProcess -SqlInstance $TestConfig.instance1 | Where-Object { $_.Program -match 'dbatools' -and $_.Status -eq 'sleeping' }).Count
-    [int]$sleepingProcs2 = (Get-DbaProcess -SqlInstance $TestConfig.instance2 | Where-Object { $_.Program -match 'dbatools' -and $_.Status -eq 'sleeping' }).Count
-    [int]$sleepingProcs3 = (Get-DbaProcess -SqlInstance $TestConfig.instance3 | Where-Object { $_.Program -match 'dbatools' -and $_.Status -eq 'sleeping' }).Count
+#    [int]$sleepingProcs1 = (Get-DbaProcess -SqlInstance $TestConfig.instance1 | Where-Object { $_.Program -match 'dbatools' -and $_.Status -eq 'sleeping' }).Count
+#    [int]$sleepingProcs2 = (Get-DbaProcess -SqlInstance $TestConfig.instance2 | Where-Object { $_.Program -match 'dbatools' -and $_.Status -eq 'sleeping' }).Count
+#    [int]$sleepingProcs3 = (Get-DbaProcess -SqlInstance $TestConfig.instance3 | Where-Object { $_.Program -match 'dbatools' -and $_.Status -eq 'sleeping' }).Count
     
-    Remove-DbaDbBackupRestoreHistory -SqlInstance $TestConfig.instance1, $TestConfig.instance2, $TestConfig.instance3 -KeepDays -1 -Confirm:$false
+#    Remove-DbaDbBackupRestoreHistory -SqlInstance $TestConfig.instance1, $TestConfig.instance2, $TestConfig.instance3 -KeepDays -1 -Confirm:$false
 
     Write-Host "`n$((Get-Date).ToString('HH:mm:ss')) ========= $sleepingProcs1 / $sleepingProcs2 / $sleepingProcs3 / $usedMemory MB / $([int]([System.GC]::GetTotalMemory($false)/1MB)) MB ==========`n"
 
@@ -217,9 +155,9 @@ foreach ($test in $tests) {
     }
     $resultInfo | ConvertTo-Json -Compress | Add-Content -Path $resultsFileName
 
-    $null = Get-DbaConnectedInstance | Disconnect-DbaInstance
-    Clear-DbaConnectionPool
-    [System.GC]::Collect()
+#    $null = Get-DbaConnectedInstance | Disconnect-DbaInstance
+#    Clear-DbaConnectionPool
+#    [System.GC]::Collect()
 
     $progressCompleted++
 

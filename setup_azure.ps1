@@ -1,4 +1,6 @@
-﻿# function prompt { "PS $(if ($NestedPromptLevel -ge 1) { '>>' })> " }
+﻿param([switch]$Continue)
+
+# function prompt { "PS $(if ($NestedPromptLevel -ge 1) { '>>' })> " }
 
 # Takes about 5 minutes to setup the maschine
 
@@ -7,6 +9,11 @@ $ErrorActionPreference = 'Stop'
 # Name of resource group and location
 $resourceGroupName = 'testing-dbatools'
 $location          = 'North Europe'
+
+# Name and size of virtual maschine
+$computerName = 'SQL2022'
+#$vmSize = 'Standard_E4s_v6'
+$vmSize = 'Standard_E2s_v6'
 
 # Name and password of the initial account
 $initUser     = 'initialAdmin'     # Will be used when creating the virtual maschines
@@ -30,17 +37,20 @@ if (-not $context) {
     return
 }
 
-# Cheching if the resource group already exists
-if (Get-AzResourceGroup -Name $resourceGroupName -ErrorAction SilentlyContinue) {
-    Write-Warning -Message "Resource group '$resourceGroupName' already exists. Stopping."
-    return
-}
-
-
 # Creating the resource group
 #############################
 
-$null = New-AzResourceGroup -Name $resourceGroupName -Location $location
+# Cheching if the resource group already exists
+if (Get-AzResourceGroup -Name $resourceGroupName -ErrorAction SilentlyContinue) {
+    if ($Continue) {
+        Write-Warning -Message "Resource group '$resourceGroupName' already exists. Continuing."
+    } else {
+        Write-Warning -Message "Resource group '$resourceGroupName' already exists. Stopping."
+        return
+    }
+} else {
+    $null = New-AzResourceGroup -Name $resourceGroupName -Location $location
+}
 
 
 # Creating key vault and certificate
@@ -60,10 +70,21 @@ $certificatePolicyParams = @{
 }
 $certificateName = "$($resourceGroupName.Replace('_',''))Certificate"
 try {
-    $null = New-AzRoleAssignment -SignInName $context.Account.Id -ResourceGroupName $resourceGroupName -RoleDefinitionName 'Key Vault Administrator'
-    $null = New-AzKeyVault -ResourceGroupName $resourceGroupName -Location $location @keyVaultParam
-    $certificatePolicy = New-AzKeyVaultCertificatePolicy @certificatePolicyParams
-    $null = Add-AzKeyVaultCertificate -VaultName $keyVaultParam.VaultName -Name $certificateName -CertificatePolicy $certificatePolicy
+    $roleAssignment = Get-AzRoleAssignment -signInName $context.Account.Id -ResourceGroupName $resourceGroupName -RoleDefinitionName 'Key Vault Administrator'
+    if (-not $roleAssignment) {
+        $roleAssignment = New-AzRoleAssignment -SignInName $context.Account.Id -ResourceGroupName $resourceGroupName -RoleDefinitionName 'Key Vault Administrator'
+    }
+    $keyVault = Get-AzKeyVault -ResourceGroupName $resourceGroupName
+    if ($keyVault) {
+        $keyVaultParam.VaultName = $keyVault.VaultName
+    } else {
+        $keyVault = New-AzKeyVault -ResourceGroupName $resourceGroupName -Location $location @keyVaultParam
+    }
+    $certificate = Get-AzKeyVaultCertificate -VaultName $keyVaultParam.VaultName -Name $certificateName
+    if (-not $certificate) {
+        $certificatePolicy = New-AzKeyVaultCertificatePolicy @certificatePolicyParams
+        $certificate = Add-AzKeyVaultCertificate -VaultName $keyVaultParam.VaultName -Name $certificateName -CertificatePolicy $certificatePolicy
+    }
     # Waiting for secret to be ready
     while (1) {
         try {
@@ -74,7 +95,7 @@ try {
         }
     }
 } catch {
-    Write-Warning -Message "An error occurred while setting up the Azure keyvault: $_"
+    Write-Warning -Message "An error occurred while setting up the Azure keyvault (line $($_.InvocationInfo.ScriptLineNumber)): $_"
     return
 }
 
@@ -119,23 +140,28 @@ $networkSecurityRules = @(
 )
 
 try {
-    $virtualNetworkSubnetConfig = New-AzVirtualNetworkSubnetConfig @virtualNetworkSubnetConfigParam
-    $null = New-AzVirtualNetwork -ResourceGroupName $resourceGroupName -Location $location @virtualNetworkParam -Subnet $virtualNetworkSubnetConfig
-    $securityRules = foreach ($networkSecurityRuleConfigParam in $networkSecurityRules) {
-        New-AzNetworkSecurityRuleConfig @networkSecurityRuleConfigParam
+    try {
+        $null = Get-AzVirtualNetwork -ResourceGroupName $resourceGroupName -Name $virtualNetworkParam.Name
+    } catch {
+        $virtualNetworkSubnetConfig = New-AzVirtualNetworkSubnetConfig @virtualNetworkSubnetConfigParam
+        $null = New-AzVirtualNetwork -ResourceGroupName $resourceGroupName -Location $location @virtualNetworkParam -Subnet $virtualNetworkSubnetConfig
     }
-    $null = New-AzNetworkSecurityGroup -ResourceGroupName $resourceGroupName -Location $location @networkSecurityGroupParam -SecurityRules $securityRules
+    try {
+        $null = Get-AzNetworkSecurityGroup -ResourceGroupName $resourceGroupName -Name $networkSecurityGroupParam.Name
+    } catch {
+        $securityRules = foreach ($networkSecurityRuleConfigParam in $networkSecurityRules) {
+            New-AzNetworkSecurityRuleConfig @networkSecurityRuleConfigParam
+        }
+        $null = New-AzNetworkSecurityGroup -ResourceGroupName $resourceGroupName -Location $location @networkSecurityGroupParam -SecurityRules $securityRules
+    }
 } catch {
-    Write-Warning -Message "An error occurred while setting up the Azure network: $_"
+    Write-Warning -Message "An error occurred while setting up the Azure network (line $($_.InvocationInfo.ScriptLineNumber)): $_"
     return
 }
 
 
 # Creating virtual machines
 ###########################
-
-$computerName = 'SQL2022'
-$vmSize = 'Standard_E4s_v6'
 
 $keyVault = Get-AzKeyVault -ResourceGroupName $resourceGroupName
 $certificateUrl = (Get-AzKeyVaultSecret -VaultName $keyVault.VaultName -Name $certificateName).Id
@@ -184,8 +210,16 @@ $bootDiagnosticParam = @{
 }
 
 try {
-    $publicIpAddress = New-AzPublicIpAddress -ResourceGroupName $resourceGroupName -Location $location @publicIpAddressParam
-    $networkInterface = New-AzNetworkInterface -ResourceGroupName $resourceGroupName -Location $location @networkInterfaceParam -PublicIpAddressId $publicIpAddress.Id
+    try {
+        $publicIpAddress = Get-AzPublicIpAddress -ResourceGroupName $resourceGroupName -Name $publicIpAddressParam.Name
+    } catch {
+        $publicIpAddress = New-AzPublicIpAddress -ResourceGroupName $resourceGroupName -Location $location @publicIpAddressParam
+    }
+    try {
+        $networkInterface = Get-AzNetworkInterface -ResourceGroupName $resourceGroupName -Name $networkInterfaceParam.Name
+    } catch {
+        $networkInterface = New-AzNetworkInterface -ResourceGroupName $resourceGroupName -Location $location @networkInterfaceParam -PublicIpAddressId $publicIpAddress.Id
+    }
     $vmConfig = New-AzVMConfig @vmConfigParam
     $vmConfig = Add-AzVMNetworkInterface -VM $vmConfig -Id $networkInterface.Id
     $vmConfig = Set-AzVMOperatingSystem -VM $vmConfig @operatingSystemParam
@@ -196,23 +230,23 @@ try {
     $vmConfig = Set-AzVmSecurityProfile -VM $vmConfig -SecurityType TrustedLaunch
     $vmConfig = Set-AzVmUefi -VM $vmConfig -EnableVtpm $true -EnableSecureBoot $true 
 } catch {
-    Write-Warning -Message "An error occurred while setting up the configuration for the Azure virtual maschine: $_"
+    Write-Warning -Message "An error occurred while setting up the configuration for the Azure virtual maschine (line $($_.InvocationInfo.ScriptLineNumber)): $_"
     return
 }
 
 try {
-    $result = New-AzVM -ResourceGroupName $resourceGroupName -Location $location -VM $vmConfig
-    if (-not $result.IsSuccessStatusCode) {
-        Write-Warning -Message "Failed to create the virtual machine. Status code: $($result.StatusCode), Reason: $($result.ReasonPhrase)"
-        return
+    try {
+        $vm = Get-AzVM -ResourceGroupName $resourceGroupName -Name $vmConfig.Name
+    } catch {
+        $result = New-AzVM -ResourceGroupName $resourceGroupName -Location $location -VM $vmConfig
+        if (-not $result.IsSuccessStatusCode) {
+            Write-Warning -Message "Failed to create the virtual machine. Status code: $($result.StatusCode), Reason: $($result.ReasonPhrase)"
+            return
+        }
     }
 } catch {
-    Write-Warning -Message "An error occurred while setting up the Azure virtual maschine: $_"
-    if ("$_" -match "An error occurred while sending the request") {
-        Write-Warning -Message "But we just hope the best and continue, because most of the time the virtual maschine is successfully created."
-    } else {
-        return
-    }
+    Write-Warning -Message "An error occurred while setting up the Azure virtual maschine (line $($_.InvocationInfo.ScriptLineNumber)): $_"
+    return
 }
 
 
@@ -271,15 +305,14 @@ $null = Invoke-Command -Session $psSession -ScriptBlock {
     Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
 
     Install-Module -Name dbatools, PSFramework
-    Install-Module -Name Pester -Force -SkipPublisherCheck -MaximumVersion 4.99
-    Install-Module -Name Pester -Force -SkipPublisherCheck -MaximumVersion 5.99
+    Install-Module -Name Pester -Force -SkipPublisherCheck
     Install-Module -Name PSScriptAnalyzer -Force -SkipPublisherCheck -MaximumVersion 1.18.2
 
     Set-ExecutionPolicy -ExecutionPolicy Bypass -Force
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1')) *> $null
 
-    choco install git vscode powershell-core notepadplusplus --confirm --limitoutput --no-progress
+    choco install git vscode powershell-core notepadplusplus --confirm --limitoutput --no-progress *> $null
 }
 
 Invoke-Command -Session $psSession -ScriptBlock { Restart-Computer -Force }

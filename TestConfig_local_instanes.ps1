@@ -16,6 +16,10 @@ if (Test-Path -Path 'C:\SQLServerFull') {
     # We are on personal setup of Andreas Jordan
     $config['InstanceConfiguration'].SourcePath = '\\dc\FileServer\Software\SQLServer\ISO\SQLServer2022'
     $config['InstanceConfiguration'].UpdateSourcePath = '\\dc\FileServer\Software\SQLServer\CU'
+} elseif (Test-Path -Path '\\dc\FileServer\SQLServer2022') {
+    # We are on personal setup of Andreas Jordan
+    $config['InstanceConfiguration'].SourcePath = '\\dc\FileServer\SQLServer2022'
+    $config['InstanceConfiguration'].UpdateSourcePath = '\\dc\FileServer\SQLServerCU'
 }
 
 # Configuration items from constants.local.ps1.example:

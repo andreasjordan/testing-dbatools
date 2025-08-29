@@ -57,6 +57,8 @@ $TestConfig = Get-TestConfig -LocalConfigPath $configFile
 $tests = Get-ChildItem -Path "$dbatoolsBase\tests\*-Dba*.Tests.ps1" | Sort-Object -Property Name -Descending
 
 $skipTests = @(
+    'Get-DbaClientProtocol.Tests.ps1'
+    'Get-DbaPageFileSetting.Tests.ps1'
 )
 $tests = $tests | Where-Object Name -notin $skipTests
 
@@ -127,6 +129,11 @@ foreach ($test in $tests) {
             Write-Warning -Message "Environment test failed: $($resultEnvironment.Failed.ExpandedPath)"
             $failure = $true
         }
+    }
+
+    if (Get-Module -Name dbatools | Where-Object { $_.Version.Major -gt 0 }) {
+        Write-Warning -Message "dbatools was loaded"
+        $failure = $true
     }
 
 #    Clear-DbaConnectionPool

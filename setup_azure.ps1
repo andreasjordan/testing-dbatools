@@ -1,6 +1,7 @@
 ﻿param([switch]$Continue)
 
 # function prompt { "PS $(if ($NestedPromptLevel -ge 1) { '>>' })> " }
+# . .\setup_azure.ps1
 
 # Takes about 5 minutes to setup the maschine
 

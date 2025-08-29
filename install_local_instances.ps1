@@ -71,9 +71,8 @@ $null = Set-DbaSpConfigure -SqlInstance $sqlInstance -Name ClrStrictSecurity -Va
 $null = Set-DbaSpConfigure -SqlInstance $sqlInstance[1, 2] -Name ExtensibleKeyManagementEnabled -Value $true
 Invoke-DbaQuery -SqlInstance $sqlInstance[1, 2] -Query "CREATE CRYPTOGRAPHIC PROVIDER dbatoolsci_AKV FROM FILE = '$($TestConfig.appveyorlabrepo)\keytests\ekm\Microsoft.AzureKeyVaultService.EKM.dll'"
 $null = Enable-DbaAgHadr -SqlInstance $sqlInstance[1, 2] -Force
-
-Invoke-DbaQuery -SqlInstance $sqlInstance[2] -Query "CREATE MASTER KEY ENCRYPTION BY PASSWORD = '<StrongPassword>'"
-Invoke-DbaQuery -SqlInstance $sqlInstance[2] -Query "CREATE CERTIFICATE dbatoolsci_AGCert WITH SUBJECT = 'AG Certificate'"
+Invoke-DbaQuery -SqlInstance $sqlInstance[1, 2] -Query "CREATE MASTER KEY ENCRYPTION BY PASSWORD = '<StrongPassword>'"
+Invoke-DbaQuery -SqlInstance $sqlInstance[1, 2] -Query "CREATE CERTIFICATE dbatoolsci_AGCert WITH SUBJECT = 'AG Certificate'"
 
 $null = Set-DbaNetworkConfiguration -SqlInstance $sqlInstance[1] -StaticPortForIPAll 14333 -RestartService
 $null = Set-DbaNetworkConfiguration -SqlInstance $sqlInstance[2] -StaticPortForIPAll 14334 -RestartService

@@ -65,15 +65,22 @@ foreach ($instance in $sqlInstance) {
     }
 }
 
+# Do we need these? We should try to not need these.
 $null = Set-DbaSpConfigure -SqlInstance $sqlInstance -Name IsSqlClrEnabled -Value $true
 $null = Set-DbaSpConfigure -SqlInstance $sqlInstance -Name ClrStrictSecurity -Value $false
 
+# Create a master key so that every test can rely on.
+Invoke-DbaQuery -SqlInstance $sqlInstance -Query "CREATE MASTER KEY ENCRYPTION BY PASSWORD = '<StrongPassword>'"
+
+# Configuration for advanced encryption tests.
 $null = Set-DbaSpConfigure -SqlInstance $sqlInstance[1, 2] -Name ExtensibleKeyManagementEnabled -Value $true
 Invoke-DbaQuery -SqlInstance $sqlInstance[1, 2] -Query "CREATE CRYPTOGRAPHIC PROVIDER dbatoolsci_AKV FROM FILE = '$($TestConfig.appveyorlabrepo)\keytests\ekm\Microsoft.AzureKeyVaultService.EKM.dll'"
+
+# Configuration for Availability Group tests.
 $null = Enable-DbaAgHadr -SqlInstance $sqlInstance[1, 2] -Force
-Invoke-DbaQuery -SqlInstance $sqlInstance[1, 2] -Query "CREATE MASTER KEY ENCRYPTION BY PASSWORD = '<StrongPassword>'"
 Invoke-DbaQuery -SqlInstance $sqlInstance[1, 2] -Query "CREATE CERTIFICATE dbatoolsci_AGCert WITH SUBJECT = 'AG Certificate'"
 
+# Configuration for service configuration tests.
 $null = Set-DbaNetworkConfiguration -SqlInstance $sqlInstance[1] -StaticPortForIPAll 14333 -RestartService
 $null = Set-DbaNetworkConfiguration -SqlInstance $sqlInstance[2] -StaticPortForIPAll 14334 -RestartService
 

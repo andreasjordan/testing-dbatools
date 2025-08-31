@@ -54,18 +54,7 @@ $null = Set-DbatoolsInsecureConnection
 
 $TestConfig = Get-TestConfig -LocalConfigPath $configFile
 
-$tests = Get-ChildItem -Path "$dbatoolsBase\tests\*-Dba*.Tests.ps1" | Sort-Object -Property Name -Descending
-
-$skipTests = @(
-)
-$tests = $tests | Where-Object Name -notin $skipTests
-
-if ($PSVersionTable.PSVersion.Major -gt 5) {
-    $skipTests = @(
-    )
-}
-$tests = $tests | Where-Object Name -notin $skipTests
-
+$tests = Get-ChildItem -Path "$dbatoolsBase\tests\*-Dba*.Tests.ps1" | Sort-Object -Property Name
 
 # Filter tests based on script parameters
 

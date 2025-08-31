@@ -2,6 +2,7 @@
 
 # function prompt { "PS $(if ($NestedPromptLevel -ge 1) { '>>' })> " }
 # . .\setup_azure.ps1
+# Start-AzVM -ResourceGroupName $resourceGroupName -Name "$($computerName)_VM"
 
 # Takes about 5 minutes to setup the maschine
 

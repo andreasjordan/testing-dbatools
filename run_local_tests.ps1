@@ -57,8 +57,6 @@ $TestConfig = Get-TestConfig -LocalConfigPath $configFile
 $tests = Get-ChildItem -Path "$dbatoolsBase\tests\*-Dba*.Tests.ps1" | Sort-Object -Property Name -Descending
 
 $skipTests = @(
-    'Get-DbaClientProtocol.Tests.ps1'
-    'Get-DbaPageFileSetting.Tests.ps1'
 )
 $tests = $tests | Where-Object Name -notin $skipTests
 

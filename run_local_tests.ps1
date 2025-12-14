@@ -15,7 +15,7 @@ $githubBase   = 'C:\GitHub'
 $dbatoolsBase = "$githubBase\dbatools"
 $testingBase = "$githubBase\testing-dbatools"
 
-$configFile = "$testingBase\TestConfig_local_instanes.ps1"
+$configFile = "$testingBase\TestConfig_local_instances.ps1"
 $logPath    = "$testingBase\logs"
 
 $resultsFileName = "$logPath\results_$([datetime]::Now.ToString('yyyMMdd_HHmmss')).txt"

@@ -56,7 +56,7 @@ $config['dbatoolsci_computer'] = $config['host1']    # Replace if your CI comput
 #$config['instance2SQLPassword'] = $null        # Replace with password if applicable
 
 # Detailed instance name for Instance2 (needed only for the test of Restore-DbaDatabase)
-$config['instance2_detailed'] = "$($config['host1']),14333\SQLInstance2"  # Adjust port and instance name as necessary
+$config['instance2_detailed'] = "$($config['host2']),14333\SQLInstance2"  # Adjust port and instance name as necessary
 
 # Path to your local AppVeyor lab repository (if applicable)
 $config['appveyorlabrepo'] = "\\fs\appveyor-lab"

@@ -25,6 +25,8 @@ $instanceParams = @{
     Configuration      = @{
         SqlMaxMemory = '1024'
     }
+    EngineCredential   = [PSCredential]::new("ORDIX\gMSA-SQLServer$", [SecureString]::new())
+    AgentCredential    = [PSCredential]::new("ORDIX\gMSA-SQLServer$", [SecureString]::new())
     AuthenticationMode = 'Mixed'
     SaCredential       = $TestConfig.SqlCred
     Credential         = [PSCredential]::new("ORDIX\Admin", (ConvertTo-SecureString -String 'P@ssw0rd' -AsPlainText -Force))

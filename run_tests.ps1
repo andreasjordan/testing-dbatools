@@ -5,7 +5,8 @@ param(
     [switch]$ContinueOnFailure,
     [switch]$SkipEnvironmentTest,
     [switch]$TestForWarnings,
-    [string]$StatusUrl
+    [string]$StatusUrl = $Env:MyStatusUrl,
+    [string]$ConfigFilename = $Env:MyConfigFilename
 )
 
 $ErrorActionPreference = 'Stop'
@@ -15,7 +16,7 @@ $githubBase   = 'C:\GitHub'
 $dbatoolsBase = "$githubBase\dbatools"
 $testingBase = "$githubBase\testing-dbatools"
 
-$configFile = "$testingBase\TestConfig_local_instances.ps1"
+$configFile = "$testingBase\$ConfigFilename"
 $logPath    = "$testingBase\logs"
 
 $resultsFileName = "$logPath\results_$([datetime]::Now.ToString('yyyMMdd_HHmmss')).txt"

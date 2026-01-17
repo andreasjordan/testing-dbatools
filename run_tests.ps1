@@ -3,10 +3,13 @@ param(
     [int]$NumberOfTestsToSkip = 0,
     [string]$CommandToStartWith,
     [switch]$ContinueOnFailure,
-    [switch]$SkipEnvironmentTest,
-    [switch]$TestForWarnings,
+    [switch]$SkipEnvironmentTest = $true,
+    [switch]$TestForWarnings = $true,
     [string]$StatusUrl = $Env:MyStatusUrl,
-    [string]$ConfigFilename = $Env:MyConfigFilename
+    [string]$ConfigFilename = 'TestConfig_remote_instances_test.ps1',
+    [ValidateSet('SINGLE', 'MULTI', 'COPY', 'HADR', 'RESTART', '2008R2', '2016')]
+    [string]$Scenario,
+    [hashtable]$Config
 )
 
 $ErrorActionPreference = 'Stop'
@@ -19,7 +22,7 @@ $testingBase = "$githubBase\testing-dbatools"
 $configFile = "$testingBase\$ConfigFilename"
 $logPath    = "$testingBase\logs"
 
-$resultsFileName = "$logPath\results_$([datetime]::Now.ToString('yyyMMdd_HHmmss')).txt"
+$resultsFileName = "$logPath\results_$($Scenario)_$([datetime]::Now.ToString('yyyMMdd_HHmmss')).txt"
 
 
 
@@ -50,14 +53,24 @@ function Send-Status {
 
 $start = Get-Date
 
-Import-Module -Name "$dbatoolsBase\dbatools.psm1" -Force
-$null = Set-DbatoolsInsecureConnection
+Import-Module "$dbatoolsBase\dbatools.psm1" -Force
 
 $TestConfig = Get-TestConfig -LocalConfigPath $configFile
+if ($Config) {
+    foreach ($cfg in $Config.GetEnumerator()) {
+        Add-Member -InputObject $TestConfig -MemberType NoteProperty -Name $cfg.Name -Value $cfg.Value -Force
+    }
+}
 
-$tests = Get-ChildItem -Path "$dbatoolsBase\tests\*-Dba*.Tests.ps1" | Sort-Object -Property Name
+$tests = Get-ChildItem -Path "$dbatoolsBase\tests\*.Tests.ps1" | Sort-Object -Property Name
 
 # Filter tests based on script parameters
+
+if ($Scenario) {
+    . "$dbatoolsBase\tests\appveyor.common.ps1"
+    . "$dbatoolsBase\tests\pester.groups.ps1"
+    $tests = Get-TestsForScenario -Scenario $Scenario -AllTest $tests
+}
 
 if ($CommandToStartWith) {
     $commandIndex = $tests.Name.IndexOf("$CommandToStartWith.Tests.ps1")
@@ -71,6 +84,11 @@ if ($CommandToStartWith) {
 
 $tests = $tests | Select-Object -First $NumberOfTestsToTest -Skip $NumberOfTestsToSkip
 
+$ProgressPreference = 'SilentlyContinue'
+Get-Date
+#Install-DbaSqlPackage
+Get-Date
+$ProgressPreference = 'Continue'
 
 Import-Module -Name Pester -MinimumVersion 5.0
 
@@ -146,6 +164,7 @@ foreach ($test in $tests) {
         SleepingProcs1    = $sleepingProcs1
         SleepingProcs2    = $sleepingProcs2
         SleepingProcs3    = $sleepingProcs3
+        TestsFailed       = $resultTest.Failed 
         EnvironmentFailed = $(if ($resultEnvironment.Result -ne 'Passed') { $resultEnvironment.Failed })
     }
     $resultInfo | ConvertTo-Json -Compress | Add-Content -Path $resultsFileName

@@ -33,6 +33,8 @@ $config = @{
     ClusterIP     = '192.168.3.70'
 }
 
+try {
+
 # Layer 1: Software and Service
 
 # On the storage server: Install Windows feature
@@ -141,3 +143,7 @@ $accessRule2 = [System.DirectoryServices.ActiveDirectoryAccessRule]::new($adClus
 $adClusterOU.psbase.ObjectSecurity.AddAccessRule($accessRule1)
 $adClusterOU.psbase.ObjectSecurity.AddAccessRule($accessRule2)
 $adClusterOU.psbase.CommitChanges()
+
+Write-PSFMessage -Level Host -Message 'Finished'
+
+} catch { Write-PSFMessage -Level Warning -Message 'Failed' -ErrorRecord $_ }

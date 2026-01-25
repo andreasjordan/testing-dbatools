@@ -76,11 +76,16 @@ $paramsAddNode = @{
     Confirm            = $false
 }
 
+Write-PSFMessage -Level Host -Message "Installing first node"
+
 $result = Install-DbaInstance @paramsInstallFailoverCluster
 $result | Format-Table
 if (-not $result.Successful) {
     throw "Failed to install SQL Server on $($paramsInstallFailoverCluster.ComputerName)"
 }
+$server = Connect-DbaInstance -SqlInstance "$SqlNetworkName\$SqlInstance" -TrustServerCertificate
+
+Write-PSFMessage -Level Host -Message "Installing second node"
 
 $result = Install-DbaInstance @paramsAddNode
 $result | Format-Table
@@ -88,8 +93,6 @@ if (-not $result.Successful) {
     throw "Failed to install SQL Server on $($paramsAddNode.ComputerName)"
 }
 
+Write-PSFMessage -Level Host -Message 'Finished'
 
-
-Write-PSFMessage -Level Host -Message 'finished'
-
-} catch { Write-PSFMessage -Level Warning -Message 'failed' -ErrorRecord $_ }
+} catch { Write-PSFMessage -Level Warning -Message 'Failed' -ErrorRecord $_ }

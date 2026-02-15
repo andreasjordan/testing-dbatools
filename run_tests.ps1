@@ -3,10 +3,10 @@ param(
     [int]$NumberOfTestsToSkip = 0,
     [string]$CommandToStartWith,
     [switch]$ContinueOnFailure,
-    [switch]$SkipEnvironmentTest = $true,
-    [switch]$TestForWarnings = $true,
+    [switch]$SkipEnvironmentTest,
+    [switch]$TestForWarnings,
     [string]$StatusUrl = $Env:MyStatusUrl,
-    [string]$ConfigFilename = 'TestConfig_remote_instances_test.ps1',
+    [string]$ConfigFilename = 'TestConfig_remote_instances.ps1',
     [ValidateSet('SINGLE', 'MULTI', 'COPY', 'HADR', 'RESTART', '2008R2', '2016')]
     [string]$Scenario,
     [hashtable]$Config
@@ -84,11 +84,11 @@ if ($CommandToStartWith) {
 
 $tests = $tests | Select-Object -First $NumberOfTestsToTest -Skip $NumberOfTestsToSkip
 
-$ProgressPreference = 'SilentlyContinue'
-Get-Date
+#$ProgressPreference = 'SilentlyContinue'
+#Get-Date
 #Install-DbaSqlPackage
-Get-Date
-$ProgressPreference = 'Continue'
+#Get-Date
+#$ProgressPreference = 'Continue'
 
 Import-Module -Name Pester -MinimumVersion 5.0
 
@@ -106,6 +106,15 @@ foreach ($test in $tests) {
         $progressParameter.SecondsRemaining = ((Get-Date) - $progressStart).TotalSeconds / $progressParameter.PercentComplete * (100 - $progressParameter.PercentComplete)
     }
     Write-Progress @progressParameter
+
+    $content = Get-Content -Path $test.FullName
+    $instanceNames = foreach ($line in $content) {
+        $code = $line -replace '#.*$',''
+        [regex]::Matches($code, '\$TestConfig\.Instance(\w+)', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase) | ForEach-Object { $_.Groups[1].Value }
+    }
+    $instanceNames = $instanceNames | Sort-Object -Unique
+    Write-Warning -Message "Using instances: $instanceNames"
+    Write-Warning -Message "Running $($test.FullName)"
 
     $failure = $false
     $startMemory = [int]([System.GC]::GetTotalMemory($false)/1MB)

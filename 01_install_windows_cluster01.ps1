@@ -33,8 +33,6 @@ $config = @{
     ClusterIP     = '192.168.3.70'
 }
 
-try {
-
 # Layer 1: Software and Service
 
 # On the storage server: Install Windows feature
@@ -70,7 +68,7 @@ foreach ($target in $config.Targets) {
         $null = $partition | Format-Volume -FileSystem NTFS -NewFileSystemLabel $disk.Name
         Dismount-DiskImage -CimSession $cimSession -ImagePath $diskPath
 
-        Add-IscsiVirtualDiskTargetMapping -ComputerName $config.StorageServer -TargetName $target.Name -Path $diskPath
+        $null = Add-IscsiVirtualDiskTargetMapping -ComputerName $config.StorageServer -TargetName $target.Name -Path $diskPath
     }
     $initiatorIds = @( )
     foreach ($node in $target.Nodes) {
@@ -106,10 +104,12 @@ foreach ($target in $config.Targets) {
 $ClusterNodes = $config.Targets[0].Nodes
 
 Write-PSFMessage -Level Host -Message 'Install cluster feature on each node'
-Invoke-Command -ComputerName $ClusterNodes -ScriptBlock { Install-WindowsFeature -Name Failover-Clustering -IncludeManagementTools } | Format-Table
+$result = Invoke-Command -ComputerName $ClusterNodes -ScriptBlock { Install-WindowsFeature -Name Failover-Clustering -IncludeManagementTools }
+if ($result.Success -contains $false) { throw "Installing WindowsFeature Failover Clustering failed" }
 
 Write-PSFMessage -Level Host -Message 'Run cluster test'
 $clusterTest = Test-Cluster -Node $ClusterNodes -WarningAction SilentlyContinue
+Write-PSFMessage -Level Host -Message "Result of cluster test is saved as $($clusterTest.FullName)"
 # &$clusterTest.FullName
 
 Write-PSFMessage -Level Host -Message 'Create the cluster'
@@ -145,5 +145,3 @@ $adClusterOU.psbase.ObjectSecurity.AddAccessRule($accessRule2)
 $adClusterOU.psbase.CommitChanges()
 
 Write-PSFMessage -Level Host -Message 'Finished'
-
-} catch { Write-PSFMessage -Level Warning -Message 'Failed' -ErrorRecord $_ }

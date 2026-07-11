@@ -15,8 +15,6 @@ Import-Module -Name PSFramework
 Import-Module -Name ActiveDirectory
 Import-Module -Name dbatools
 
-try {
-
 $installCredential = [PSCredential]::new("ORDIX\Admin", (ConvertTo-SecureString -String 'P@ssw0rd' -AsPlainText -Force))
 $sqlServiceCredential = [PSCredential]::new("ORDIX\gMSA-SQLServer$", [SecureString]::new())
 
@@ -79,20 +77,16 @@ $paramsAddNode = @{
 Write-PSFMessage -Level Host -Message "Installing first node"
 
 $result = Install-DbaInstance @paramsInstallFailoverCluster
-$result | Format-Table
 if (-not $result.Successful) {
     throw "Failed to install SQL Server on $($paramsInstallFailoverCluster.ComputerName)"
 }
-$server = Connect-DbaInstance -SqlInstance "$SqlNetworkName\$SqlInstance" -TrustServerCertificate
+$null = Connect-DbaInstance -SqlInstance "$SqlNetworkName\$SqlInstance" -TrustServerCertificate
 
 Write-PSFMessage -Level Host -Message "Installing second node"
 
 $result = Install-DbaInstance @paramsAddNode
-$result | Format-Table
 if (-not $result.Successful) {
     throw "Failed to install SQL Server on $($paramsAddNode.ComputerName)"
 }
 
 Write-PSFMessage -Level Host -Message 'Finished'
-
-} catch { Write-PSFMessage -Level Warning -Message 'Failed' -ErrorRecord $_ }

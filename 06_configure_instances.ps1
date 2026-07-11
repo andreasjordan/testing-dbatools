@@ -11,8 +11,6 @@ Import-Module -Name PSFramework
 Import-Module -Name ActiveDirectory
 Import-Module -Name dbatools
 
-try {
-
 Write-PSFMessage -Level Host -Message 'Enabling remote DAC'
 $null = Set-DbaSpConfigure -SqlInstance $SqlInstances -Name RemoteDacConnectionsEnabled -Value $true
 
@@ -32,5 +30,3 @@ Write-PSFMessage -Level Host -Message 'Configuration for service configuration t
 $null = Set-DbaNetworkConfiguration -SqlInstance $ServiceInstances -StaticPortForIPAll 14333 -RestartService -Confirm:$false
 
 Write-PSFMessage -Level Host -Message 'Finished'
-
-} catch { Write-PSFMessage -Level Warning -Message 'Failed' -ErrorRecord $_ }

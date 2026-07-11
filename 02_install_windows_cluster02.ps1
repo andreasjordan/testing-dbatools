@@ -10,13 +10,13 @@ $ErrorActionPreference = 'Stop'
 Import-Module -Name PSFramework
 Import-Module -Name ActiveDirectory
 
-try {
-
 Write-PSFMessage -Level Host -Message 'Install cluster feature on each node'
-Invoke-Command -ComputerName $ClusterNodes -ScriptBlock { Install-WindowsFeature -Name Failover-Clustering -IncludeManagementTools } | Format-Table
+$result = Invoke-Command -ComputerName $ClusterNodes -ScriptBlock { Install-WindowsFeature -Name Failover-Clustering -IncludeManagementTools }
+if ($result.Success -contains $false) { throw "Installing WindowsFeature Failover Clustering failed" }
 
 Write-PSFMessage -Level Host -Message 'Run cluster test'
 $clusterTest = Test-Cluster -Node $ClusterNodes -WarningAction SilentlyContinue
+Write-PSFMessage -Level Host -Message "Result of cluster test is saved as $($clusterTest.FullName)"
 # &$clusterTest.FullName
 
 Write-PSFMessage -Level Host -Message 'Create the cluster'
@@ -44,5 +44,3 @@ $adClusterOU.psbase.ObjectSecurity.AddAccessRule($accessRule2)
 $adClusterOU.psbase.CommitChanges()
 
 Write-PSFMessage -Level Host -Message 'Finished'
-
-} catch { Write-PSFMessage -Level Warning -Message 'Failed' -ErrorRecord $_ }

@@ -33,7 +33,7 @@ $config = @{
     ClusterIP     = '192.168.3.70'
 }
 
-# Layer 1: Software and Service
+Write-PSFMessage -Level Host -Message 'Install software and service for iSCSI storage'
 
 # On the storage server: Install Windows feature
 $result = Install-WindowsFeature -ComputerName $config.StorageServer -Name FS-iSCSITarget-Server
@@ -43,7 +43,7 @@ if (-not $result.Success) { throw "Installing WindowsFeature iSCSI Target Server
 Set-Service -ComputerName $config.Targets.Nodes -Name MSiSCSI -StartupType Automatic -Status Running
 
 
-# Layer 2: Create and connect storage
+Write-PSFMessage -Level Host -Message 'Create and connect storage'
 
 # On the storage server: Create directory for disks, create target, create and format disks, grant access to clients
 Invoke-Command -ComputerName $config.StorageServer -ArgumentList $config.StoragePath -ScriptBlock { 
@@ -61,12 +61,12 @@ foreach ($target in $config.Targets) {
         $diskPath = "$($config.StoragePath)\$($disk.Name).vhdx"
         $null = New-IscsiVirtualDisk -ComputerName $config.StorageServer -Path $diskPath -SizeBytes $disk.Size -Description $disk.Name
 
-        Mount-DiskImage -CimSession $cimSession -ImagePath $diskPath
+        $null = Mount-DiskImage -CimSession $cimSession -ImagePath $diskPath
         $mountedDisk = Get-Disk -CimSession $cimSession | Where-Object PartitionStyle -eq 'RAW'
         $mountedDisk | Initialize-Disk -PartitionStyle GPT
         $partition = $mountedDisk | New-Partition -UseMaximumSize
         $null = $partition | Format-Volume -FileSystem NTFS -NewFileSystemLabel $disk.Name
-        Dismount-DiskImage -CimSession $cimSession -ImagePath $diskPath
+        $null = Dismount-DiskImage -CimSession $cimSession -ImagePath $diskPath
 
         $null = Add-IscsiVirtualDiskTargetMapping -ComputerName $config.StorageServer -TargetName $target.Name -Path $diskPath
     }

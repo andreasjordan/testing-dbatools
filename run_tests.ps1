@@ -36,8 +36,8 @@ function Send-Status {
             Method          = 'Post'
             ContentType     = 'application/json'
             Body            = @{
-                IP      = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -ne '127.0.0.1' } | Select-Object -First 1).IPAddress
-                Host    = [System.Net.Dns]::GetHostName()
+                IP      = '127.0.0.1'
+                Host    = 'localhost'
                 Message = $Message
             } | ConvertTo-Json -Compress
             UseBasicParsing = $true

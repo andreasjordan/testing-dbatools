@@ -5,7 +5,7 @@ $githubBase   = 'C:\GitHub'
 $dbatoolsBase = "$githubBase\dbatools"
 $testingBase = "$githubBase\testing-dbatools"
 
-$configFile = "$testingBase\TestConfig_local_instanes.ps1"
+$configFile = "$testingBase\TestConfig_local_instances.ps1"
 $logPath    = "$testingBase\logs"
 
 Import-Module -Name "$dbatoolsBase\dbatools.psm1" -Force

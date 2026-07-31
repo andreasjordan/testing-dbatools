@@ -5,7 +5,7 @@ $githubBase   = 'C:\GitHub'
 $dbatoolsBase = "$githubBase\dbatools"
 $testingBase = "$githubBase\testing-dbatools"
 
-$configFile = "$testingBase\TestConfig_local_instanes.ps1"
+$configFile = "$testingBase\TestConfig_local_instances.ps1"
 
 Import-Module -Name dbatools
 $PSDefaultParameterValues['*-Dba*:EnableException'] = $true
@@ -48,7 +48,14 @@ foreach ($instance in $sqlInstance) {
     }
 }
 
+# Only remove the leftovers of the instances if all of them are really gone.
+$remainingInstances = $sqlInstance | Where-Object { Get-DbaService -SqlInstance $PSItem }
+if ($remainingInstances) {
+    Write-Warning -Message "[$([datetime]::Now.ToString('HH:mm:ss'))] Not removing program files, these instances are still installed: $($remainingInstances -join ', ')"
+    return
+}
+
 Remove-Item -Path 'C:\Program Files\Microsoft SQL Server\MSSQL*' -Recurse
-Remove-Item -Path "$($TestConfig)\*" -Recurse -ErrorAction SilentlyContinue
+Remove-Item -Path "$($TestConfig.Temp)\*" -Recurse -ErrorAction SilentlyContinue
 
 Write-Host "[$([datetime]::Now.ToString('HH:mm:ss'))] Finished uninstall"

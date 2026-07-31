@@ -12,12 +12,15 @@ $results = Get-ChildItem -Path $logPath -Filter results*.txt | Sort-Object LastW
 
 $results | Group-Object Result -NoElement
 
-$passed = $results | Where-Object Result -eq 'Passed'
-$failed = $results | Where-Object Result -eq 'Failed'
+$passed = @($results | Where-Object Result -eq 'Passed')
+$failed = @($results | Where-Object Result -eq 'Failed')
 
 $failed.TestFileName
 
-$failed[-1].TestsFailed
+if ($failed) {
+    # Details of the test that failed last - this is where a stopped run has to be continued.
+    $failed[-1].TestsFailed
+}
 
 break
 

@@ -1,26 +1,30 @@
-﻿$testPath = "$env:OneDrive\github.com\dataplat\dbatools\tests"
+[CmdletBinding()]
+param (
+    [string]$TestPath = "C:\GitHub\dbatools\tests",
+    # By default the result is put into the clipboard, use this to get it as objects.
+    [switch]$PassThru
+)
 
-$testFiles = Get-ChildItem -Path $testPath -Filter *-Dba*.Tests.ps1
+$testFiles = Get-ChildItem -Path $TestPath -Filter *-Dba*.Tests.ps1 | Sort-Object -Property Name
 
 $result = foreach ($file in $testFiles) {
     $content = Get-Content -Path $file.FullName
-    $instanceNumbers = foreach ($line in $content) {
-        if ($line -match '^[^#]*\$TestConfig\.instance(\d)') {
-            $Matches[1]
-        }
+    # This matches both the current names ($TestConfig.InstanceSingle, $TestConfig.InstanceMulti1, ...)
+    # and the legacy names ($TestConfig.instance1, ...), but not commented out code.
+    $instanceNames = foreach ($line in $content) {
+        $code = $line -replace '#.*$', ''
+        [regex]::Matches($code, '\$TestConfig\.Instance(\w+)', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase) | ForEach-Object { $_.Groups[1].Value }
     }
-    $instanceNumbers = $instanceNumbers | Sort-Object -Unique
+    $instanceNames = $instanceNames | Sort-Object -Unique
 
     [PSCustomObject]@{
         Command   = $file.Name -replace '.Tests.ps1$', ''
-        Instance1 = $instanceNumbers -contains 1
-        Instance2 = $instanceNumbers -contains 2
-        Instance3 = $instanceNumbers -contains 3
-        Instances = $instanceNumbers -join ' '
+        Instances = $instanceNames -join ' '
     }
 }
 
-$resultGroups = $result | Group-Object -Property Instances | Sort-Object Name
+$resultGroups = $result | Group-Object -Property Instances | Sort-Object -Property Name
+
 $output = @(
     'Summary:'
     '========'
@@ -44,4 +48,10 @@ $output += foreach ($group in $resultGroups) {
     }
 }
 
-$output | Set-Clipboard
+if ($PassThru) {
+    $result
+} else {
+    $output | Set-Clipboard
+    Write-Host "Analysed $($testFiles.Count) test files, the summary is in the clipboard"
+    $resultGroups | Format-Table -Property Count, Name -AutoSize
+}

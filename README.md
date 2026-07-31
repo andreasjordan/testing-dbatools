@@ -2,7 +2,7 @@
 
 This repository contains script to setup labs and to run tests for the PowerShell module [dbatools](https://github.com/dataplat/dbatools).
 
-This is not a replacement for the AppVeyor tests but an addition.
+This is not a replacement for the CI tests but an addition. Since July 2026 that CI runs on self-hosted Azure VMSS runners instead of AppVeyor, but the matrix and the `tests\appveyor.*.ps1` scripts were ported over, so the scenario names (SINGLE, MULTI, COPY, HADR, RESTART) still match.
 
 Details about the used cloud vm will follow.
 
@@ -27,7 +27,7 @@ Goals for the future:
 * Using two servers in an active directory domain with a failover cluster (without shared storage) to test Availability Groups, Mirroring, database migrations and other related stuff.
 * Test different versions of SQL Server. Currently I use 2022.
 * All BeforeAll and AfterAll must use -EnableException to make sure that the test setup is correct.
-* Migrating more tests from pester 4 to pester 5.
+  Run `Invoke-Pester .\TestTestfiles.Tests.ps1` without excluding the tag `Goal` to see how far this still is.
 
 
 More documentation will follow...

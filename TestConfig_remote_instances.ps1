@@ -38,3 +38,17 @@ $config['InstanceRestart'] = "SQL03\SQL2022"
 $config['appveyorlabrepo'] = "\\fs\appveyor-lab"
 
 $config['Temp'] = "\\fs\Temp"
+
+# Expectations used by TestEnvironment.Tests.ps1 to verify that the lab is still in its initial state.
+# These have to match what 06_configure_instances.ps1 sets up.
+$config['ExpectedTcpPort'] = @{
+    "SQL03\SQL2022" = 14333
+}
+$config['HadrInstances'] = @(
+    "SQL03\SQL2025"
+    "SQL04\SQL2025"
+)
+$config['AgCertificateInstances'] = @(
+    "SQL03\SQL2025"
+    "SQL04\SQL2025"
+)

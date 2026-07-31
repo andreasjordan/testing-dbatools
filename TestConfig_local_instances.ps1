@@ -47,6 +47,22 @@ $config['Defaults'] = [System.Management.Automation.DefaultParameterDictionary]@
 }
 #>
 
+# Expectations used by TestEnvironment.Tests.ps1 to verify that the lab is still in its initial state.
+# These have to match what install_local_instances.ps1 sets up.
+$config['ExpectedTcpPort'] = @{
+    $config['instance1'] = 1433
+    $config['instance2'] = 14333
+    $config['instance3'] = 14334
+}
+$config['HadrInstances'] = @(
+    $config['instance2']
+    $config['instance3']
+)
+$config['AgCertificateInstances'] = @(
+    $config['instance2']
+    $config['instance3']
+)
+
 # Additional configurations (needed for the test of Test-DbaDiskAlignment)
 $config['dbatoolsci_computer'] = $config['host1']    # Replace if your CI computer is different
 

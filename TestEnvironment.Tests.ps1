@@ -1,16 +1,25 @@
-#Requires -Module @{ ModuleName="Pester"; ModuleVersion="5.0"}
+#Requires -Module @{ ModuleName="Pester"; ModuleVersion="6.0"}
 param(
     $ModuleName               = "dbatools",
     $PSDefaultParameterValues = $TestConfig.Defaults
 )
 
 BeforeDiscovery {
-    $instance = $TestConfig.instance1, $TestConfig.instance2, $TestConfig.instance3
+    # Test every instance the loaded configuration knows about.
+    # This supports both configuration generations: the current names
+    # (InstanceSingle, InstanceMulti1, ...) and the legacy instance1/2/3.
+    # Several configuration entries usually point at the same instance,
+    # so we sort them unique to test each instance only once.
+    $excludedKeys = 'InstanceConfiguration', 'instance2_detailed'
+    $instance = $TestConfig.PSObject.Properties |
+        Where-Object { $_.Name -match '^Instance' -and $_.Name -notin $excludedKeys -and $_.Value -is [string] -and $_.Value } |
+        ForEach-Object { $_.Value } |
+        Sort-Object -Unique
 }
 
 Describe "the temporary files" {
-    It -Skip:($TestConfig.Temp -eq 'C:\Temp') "Has no files in legacy temp folder" {
-        Get-ChildItem -Path C:\Temp | Should -BeNullOrEmpty
+    It "Has no files in legacy temp folder" -Skip:($TestConfig.Temp -eq 'C:\Temp') {
+        Get-ChildItem -Path C:\Temp -ErrorAction SilentlyContinue | Should -BeNullOrEmpty
     }
 
     It "Has no files in new temp folder" {
@@ -23,15 +32,17 @@ Describe "the instance <_>" -ForEach $instance {
         $server = Connect-DbaInstance -SqlInstance $PSItem
         $netConf = Get-DbaNetworkConfiguration -SqlInstance $server
         $agHadr = Get-DbaAgHadr -SqlInstance $PSItem
+
+        # The default backup folder is a local path on the host of the instance,
+        # so we have to go through the admin share to reach a remote instance.
+        $backupPath = $server.BackupDirectory
+        if ($server.ComputerName -ne $env:COMPUTERNAME) {
+            $backupPath = '\\{0}\{1}' -f $server.ComputerName, ($backupPath -replace '^([A-Za-z]):', '$1$')
+        }
     }
 
-    #It "Has correct default backup folder" {
-    #    $server.BackupDirectory | Should -match '^C..Program.Files.Microsoft.SQL.Server.MSSQL.*MSSQL.Backup$'
-    #}
-
     It "Has no files in default backup folder" {
-        # Works only for local instances
-        Get-ChildItem -Path $server.BackupDirectory | Should -HaveCount 0
+        Get-ChildItem -Path $backupPath | Should -HaveCount 0
     }
 
     It "Has no user databases" {
@@ -54,35 +65,26 @@ Describe "the instance <_>" -ForEach $instance {
     }
 
     It "Has the correct TCP port configured" {
-        if ($PSItem -eq $TestConfig.instance1) {
-            $configTcpPort = 1433
-        } elseif ($PSItem -eq $TestConfig.instance2) {
-            $configTcpPort = 14333
-        } elseif ($PSItem -eq $TestConfig.instance3) {
-            $configTcpPort = 14334
+        # Only the instances listed in the configuration need a static port,
+        # all other instances are free to use whatever dynamic port they got.
+        $expectedTcpPort = $TestConfig.ExpectedTcpPort[$PSItem]
+        if (-not $expectedTcpPort) {
+            Set-ItResult -Skipped -Because "no static port is configured for $PSItem"
         }
 
-        ($netConf.TcpIpAddresses | Where-Object Name -eq IPAll).TcpPort | Should -Be $configTcpPort
+        ($netConf.TcpIpAddresses | Where-Object Name -eq IPAll).TcpPort | Should -Be $expectedTcpPort
     }
 
     It "Has the correct Hadr setting" {
-        if ($PSItem -eq $TestConfig.instance1) {
-            $targeIsHadrEnabled = $false
-        } elseif ($PSItem -eq $TestConfig.instance2) {
-            $targeIsHadrEnabled = $true
-        } elseif ($PSItem -eq $TestConfig.instance3) {
-            $targeIsHadrEnabled = $true
-        }
-
-        $agHadr.IsHadrEnabled | Should -Be $targeIsHadrEnabled
+        $agHadr.IsHadrEnabled | Should -Be ($PSItem -in $TestConfig.HadrInstances)
     }
 
     It "Has a certificate (if needed)" {
-        if ($PSItem -eq $TestConfig.instance3) {
-            $server.Databases['master'].Certificates | Where-Object Name -eq 'dbatoolsci_AGCert' | Should -Not -BeNullOrEmpty
-        }
-        if ($PSItem -ne $TestConfig.instance3) {
-            $server.Databases['master'].Certificates | Where-Object Name -eq 'dbatoolsci_AGCert' | Should -BeNullOrEmpty
+        $certificate = $server.Databases['master'].Certificates | Where-Object Name -eq 'dbatoolsci_AGCert'
+        if ($PSItem -in $TestConfig.AgCertificateInstances) {
+            $certificate | Should -Not -BeNullOrEmpty
+        } else {
+            $certificate | Should -BeNullOrEmpty
         }
     }
 }

@@ -87,14 +87,20 @@ try {
         $certificatePolicy = New-AzKeyVaultCertificatePolicy @certificatePolicyParams
         $certificate = Add-AzKeyVaultCertificate -VaultName $keyVaultParam.VaultName -Name $certificateName -CertificatePolicy $certificatePolicy
     }
-    # Waiting for secret to be ready
-    while (1) {
+    # Waiting for secret to be ready, but not forever
+    $secretIsReady = $false
+    foreach ($try in 1..30) {
         try {
             $null = Get-AzKeyVaultSecret -VaultName $keyVaultParam.VaultName -Name $certificateName
+            $secretIsReady = $true
             break
         } catch {
             Start-Sleep -Seconds 10
         }
+    }
+    if (-not $secretIsReady) {
+        Write-Warning -Message "Certificate secret '$certificateName' was not ready after 5 minutes. Stopping."
+        return
     }
 } catch {
     Write-Warning -Message "An error occurred while setting up the Azure keyvault (line $($_.InvocationInfo.ScriptLineNumber)): $_"
@@ -265,14 +271,16 @@ function New-MyAzurePSSession {
         Authentication = "Negotiate"
     }
 
-    while (1) {
+    # The virtual machine needs some time to boot, so we retry - but not forever.
+    foreach ($try in 1..30) {
         try {
             New-PSSession @psSessionParam
-            break
+            return
         } catch {
             Start-Sleep -Seconds 10
         }
     }
+    throw "Failed to connect to $ipAddress within 5 minutes"
 }
 
 function New-MyAzureRDPSession {

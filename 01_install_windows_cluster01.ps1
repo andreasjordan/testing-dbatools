@@ -1,5 +1,8 @@
 $ErrorActionPreference = 'Stop'
 
+Import-Module -Name PSFramework
+Import-Module -Name ActiveDirectory
+
 $config = @{
     StorageServer = 'dc.ordix.local'
     StoragePath   = 'C:\iSCSIDisks'
@@ -62,7 +65,11 @@ foreach ($target in $config.Targets) {
         $null = New-IscsiVirtualDisk -ComputerName $config.StorageServer -Path $diskPath -SizeBytes $disk.Size -Description $disk.Name
 
         $null = Mount-DiskImage -CimSession $cimSession -ImagePath $diskPath
-        $mountedDisk = Get-Disk -CimSession $cimSession | Where-Object PartitionStyle -eq 'RAW'
+        # We must only touch the disk we have just mounted.
+        # Taking every RAW disk here would initialize and format unrelated disks of the storage server.
+        $diskNumber = (Get-DiskImage -CimSession $cimSession -ImagePath $diskPath).Number
+        $mountedDisk = Get-Disk -CimSession $cimSession -Number $diskNumber
+        if ($mountedDisk.PartitionStyle -ne 'RAW') { throw "Disk $diskNumber for $diskPath is not RAW but $($mountedDisk.PartitionStyle)" }
         $mountedDisk | Initialize-Disk -PartitionStyle GPT
         $partition = $mountedDisk | New-Partition -UseMaximumSize
         $null = $partition | Format-Volume -FileSystem NTFS -NewFileSystemLabel $disk.Name

@@ -71,9 +71,9 @@ Describe "the test file <_.Name>" -ForEach $testFile {
         # first command and nothing else. Written that way the check only ever looked at one
         # statement per file, and a top level Write-Host passed it.
         $topLevelNames = $topLevelCommands | ForEach-Object { $PSItem.CommandElements[0].Value }
-        # Dot sourcing is how the tests of a private function get at the function under test.
-        $dotSourced = $topLevelCommands | Where-Object { $PSItem.InvocationOperator -eq 'Dot' } | ForEach-Object { $PSItem.CommandElements[0].Value }
-        $allowedTopLevel = @('Describe', 'InModuleScope', 'BeforeDiscovery') + $dotSourced
+        # No dot sourcing: a private function does not need it, because a checkout has no
+        # dbatools.dat and the psm1 then exports every function, private ones included.
+        $allowedTopLevel = @('Describe', 'InModuleScope', 'BeforeDiscovery')
 
         $describeCommands = Get-DescribeCommand -Ast $ast
         $unitTestBlocks = $describeCommands | Where-Object { 'UnitTests' -in (Get-CommandTag -CommandAst $PSItem) }
@@ -103,24 +103,6 @@ Describe "the test file <_.Name>" -ForEach $testFile {
             }
         }
 
-        # Should -Throw compares the expected message with -like. Without a wildcard the assertion
-        # can only pass if the command reports nothing but that exact string, which is almost never
-        # true. These were a substring match in Pester 4 and passed there.
-        $throwWithoutWildcard = @()
-        foreach ($command in $ast.FindAll({ $args[0] -is [System.Management.Automation.Language.CommandAst] -and $args[0].CommandElements[0].Value -eq 'Should' }, $true)) {
-            $elements = $command.CommandElements
-            for ($i = 1; $i -lt $elements.Count; $i++) {
-                if ($elements[$i] -isnot [System.Management.Automation.Language.CommandParameterAst]) { continue }
-                if ($elements[$i].ParameterName -notin 'Throw', 'ExpectedMessage') { continue }
-                $value = $elements[$i].Argument
-                if (-not $value -and $i -lt $elements.Count - 1 -and $elements[$i + 1] -isnot [System.Management.Automation.Language.CommandParameterAst]) {
-                    $value = $elements[$i + 1]
-                }
-                if ($value -is [System.Management.Automation.Language.StringConstantExpressionAst] -and $value.Value -notmatch '[\*\?]') {
-                    $throwWithoutWildcard += $command
-                }
-            }
-        }
 
         # A Mock without -ModuleName does not apply to the code inside the module, so the command
         # under test runs unmocked while the test looks like it is isolated. Only mocks inside an
@@ -139,9 +121,69 @@ Describe "the test file <_.Name>" -ForEach $testFile {
                 return $true
             }
 
+        # A statement inside an It that computes a comparison and throws the result away. It reads
+        # like an assertion, it runs, and it can never fail. Only comparisons are flagged - a bare
+        # method call is usually a deliberate side effect.
+        $discardedComparison = @()
+        foreach ($itCommand in $ast.FindAll({ $args[0] -is [System.Management.Automation.Language.CommandAst] -and $args[0].CommandElements[0].Value -eq 'It' }, $true)) {
+            $body = $itCommand.CommandElements | Where-Object { $_ -is [System.Management.Automation.Language.ScriptBlockExpressionAst] } | Select-Object -First 1
+            if (-not $body) { continue }
+            foreach ($statement in $body.ScriptBlock.EndBlock.Statements) {
+                if ($statement -isnot [System.Management.Automation.Language.PipelineAst]) { continue }
+                if ($statement.PipelineElements.Count -ne 1) { continue }
+                $element = $statement.PipelineElements[0]
+                if ($element -isnot [System.Management.Automation.Language.CommandExpressionAst]) { continue }
+                if ($element.Expression -is [System.Management.Automation.Language.BinaryExpressionAst]) {
+                    $discardedComparison += $statement
+                }
+            }
+        }
+
+        # -ForEach is read at discovery, so its cases have to be built in a BeforeDiscovery. Fed from
+        # a BeforeAll the variable is still empty at discovery and the block produces no tests at all
+        # - the same failure as a foreach loop around It, just spelled differently.
+        $discoveryVariable = @()
+        foreach ($beforeDiscovery in $ast.FindAll({ $args[0] -is [System.Management.Automation.Language.CommandAst] -and $args[0].CommandElements[0].Value -eq 'BeforeDiscovery' }, $true)) {
+            $discoveryVariable += $beforeDiscovery.FindAll({ $args[0] -is [System.Management.Automation.Language.AssignmentStatementAst] }, $true) |
+                ForEach-Object { $PSItem.Left.Extent.Text.TrimStart('$') }
+        }
+        $forEachNotFromDiscovery = @()
+        foreach ($block in $allBlocks) {
+            $elements = $block.CommandElements
+            for ($i = 0; $i -lt $elements.Count; $i++) {
+                if ($elements[$i] -isnot [System.Management.Automation.Language.CommandParameterAst]) { continue }
+                if ($elements[$i].ParameterName -ne 'ForEach') { continue }
+                $value = $elements[$i].Argument
+                if (-not $value -and $i -lt $elements.Count - 1) { $value = $elements[$i + 1] }
+                if ($value -is [System.Management.Automation.Language.VariableExpressionAst] -and $value.VariablePath.UserPath -notin $discoveryVariable) {
+                    $forEachNotFromDiscovery += $block
+                }
+            }
+        }
+
+        # An integration Describe that creates objects on the instance but has no AfterAll anywhere.
+        # A heuristic - some of these clean up in a way this cannot see - so it only reports.
+        $integrationWithoutCleanup = $describeCommands | Where-Object {
+            'IntegrationTests' -in (Get-CommandTag -CommandAst $PSItem) -and
+            $PSItem.Extent.Text -match 'New-Dba|Backup-Dba|New-Item' -and
+            $PSItem.Extent.Text -notmatch 'AfterAll'
+        }
+
         $content = Get-Content -Path $PSItem.FullName
         $enableCount = ($content -match [regex]::Escape('$PSDefaultParameterValues["*-Dba*:EnableException"] = $true')).Count
         $removeCount = ($content -match [regex]::Escape('$PSDefaultParameterValues.Remove("*-Dba*:EnableException")')).Count
+
+        # These read $content, so they have to come after it is filled. Every one is wrapped in
+        # @() because -match against $null returns the boolean $false rather than an empty array,
+        # and $false is not empty - the check would then fail on every file instead of none.
+        $usesTemp = @($content -match [regex]::Escape('$TestConfig.Temp'))
+        $usesGetRandom = @($content -match 'Get-Random')
+        $underscoreVariable = @($content -match '\$_\.')
+        $plainSplat = @($content -match '^\s*\$splat\s*=')
+        $backtickContinuation = @($content -match '`\s*$')
+        $stringSkip = @($content -match '-Skip:\s*"(true|false)"')
+        $quotedCommandName = @($content -match '^\s*(Describe|Context)\s+"\$CommandName"')
+        $oldInstanceName = @($content -match '\$TestConfig\.instance[123]\b')
     }
 
     It "Can be parsed without errors" {
@@ -163,7 +205,7 @@ Describe "the test file <_.Name>" -ForEach $testFile {
         $notACommand.Extent.Text | Should -BeNullOrEmpty -Because 'only commands are allowed at the top level of a test file'
 
         $otherCommands = $topLevelNames | Where-Object { $_ -notin $allowedTopLevel }
-        $otherCommands | Should -BeNullOrEmpty -Because 'only Describe, InModuleScope, BeforeDiscovery and dot sourcing are allowed at the top level'
+        $otherCommands | Should -BeNullOrEmpty -Because 'only Describe, InModuleScope and BeforeDiscovery are allowed at the top level'
     }
 
     It "Has at least one Describe block for the unit tests" {
@@ -203,16 +245,66 @@ Describe "the test file <_.Name>" -ForEach $testFile {
 
     # Also goals. These are small numbers across the tree, but each one needs a look at the
     # individual test before it can be changed, so they are reported and not enforced yet.
-    It "Passes a wildcard to every Should -Throw that expects a message" -Tag Goal {
-        $throwWithoutWildcard | ForEach-Object { "line $($PSItem.Extent.StartLineNumber): $($PSItem.Extent.Text)" } |
-            Should -BeNullOrEmpty -Because 'Should -Throw matches with -like, so a message without a wildcard never matches'
-    }
+    # There is deliberately no check that Should -Throw uses a wildcard. It was tried: it flags
+    # 13 assertions across 7 files, and every one that can be run passes, because the expected
+    # message really is the whole message. An exact expectation is the stronger assertion, and
+    # nothing in the syntax distinguishes it from a fragment that can never match. Only running
+    # the test tells them apart, so this belongs in a test run and not in a static check.
 
     It "Uses ModuleName on every Mock outside of InModuleScope" -Tag Goal {
         $mocksWithoutModuleName | ForEach-Object { "line $($PSItem.Extent.StartLineNumber): $($PSItem.Extent.Text.Split([Environment]::NewLine)[0])" } |
             Should -BeNullOrEmpty -Because 'a Mock without -ModuleName never applies to the code inside the module'
     }
 
+    # Real bugs, not style: both describe tests that do not exist or cannot fail. The tree is
+    # clean, so they are hard checks.
+    It "Has no It block that computes a comparison and throws it away" {
+        $discardedComparison | ForEach-Object { "line $($PSItem.Extent.StartLineNumber): $($PSItem.Extent.Text)" } |
+            Should -BeNullOrEmpty -Because 'an assertion has to be piped to Should, otherwise it runs and can never fail'
+    }
+
+    It "Builds every -ForEach case list in a BeforeDiscovery" {
+        $forEachNotFromDiscovery | ForEach-Object { "line $($PSItem.Extent.StartLineNumber): $($PSItem.CommandElements[0].Value) $($PSItem.CommandElements[1].Extent.Text)" } |
+            Should -BeNullOrEmpty -Because '-ForEach is read at discovery, so a case list built in BeforeAll is still empty and the block produces no tests'
+    }
+
+    # Style and hygiene. These may stay Goal.
+    It "Cleans up after an integration test that creates objects" -Tag Goal {
+        $integrationWithoutCleanup | ForEach-Object { "line $($PSItem.Extent.StartLineNumber)" } |
+            Should -BeNullOrEmpty -Because 'a Describe that creates objects on the instance needs an AfterAll that removes them'
+    }
+
+    It "Makes temporary paths unique with Get-Random" -Tag Goal {
+        if (-not $usesTemp) {
+            Set-ItResult -Skipped -Because "$($PSItem.Name) does not use TestConfig.Temp"
+        }
+        $usesGetRandom | Should -Not -BeNullOrEmpty -Because 'two test files sharing a temp path collide when they run in the same lab'
+    }
+
+    It "Uses PSItem rather than the underscore variable" -Tag Goal {
+        $underscoreVariable | Should -BeNullOrEmpty -Because 'the guide asks for $PSItem except where compatibility needs $_'
+    }
+
+    It "Names every splat after its purpose" -Tag Goal {
+        $plainSplat | Should -BeNullOrEmpty -Because 'a plain $splat collides across scopes, the guide asks for $splat<Purpose>'
+    }
+
+    It "Uses no backtick line continuation" -Tag Goal {
+        $backtickContinuation | Should -BeNullOrEmpty -Because 'backticks are banned, use splatting or a natural line break'
+    }
+
+    # Ratchets. The whole tree already passes these, so they are hard checks that keep it that way.
+    It "Uses a boolean and not a string for -Skip" {
+        $stringSkip | Should -BeNullOrEmpty -Because 'a non-empty string is always true, so -Skip:"false" skips the test'
+    }
+
+    It "Puts no unnecessary quotes around the command name" {
+        $quotedCommandName | Should -BeNullOrEmpty -Because 'Describe $CommandName does not need quoting'
+    }
+
+    It "Uses the current TestConfig instance names" {
+        $oldInstanceName | Should -BeNullOrEmpty -Because 'instance1, instance2 and instance3 no longer exist, see the instance table in tests/CLAUDE.md'
+    }
     It "Has no block switched off with a bare -Skip" -Tag Goal {
         # A bare -Skip is not wrong in itself, but nothing makes it visible afterwards. This test
         # exists so that a permanently skipped block stays a conscious decision - Update-DbaInstance

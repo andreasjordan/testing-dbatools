@@ -29,4 +29,13 @@ $null = Copy-DbaDbCertificate -Source $HadrInstances[0] -Destination $HadrInstan
 Write-PSFMessage -Level Host -Message 'Configuration for service configuration tests'
 $null = Set-DbaNetworkConfiguration -SqlInstance $ServiceInstances -StaticPortForIPAll 14333 -RestartService -Confirm:$false
 
+Write-PSFMessage -Level Host -Message "Configuration for login lockout tests"
+# A SQL login can only be locked out when the host running the instance has an account lockout
+# threshold, and SQL Server reads that from the local policy of the host - the domain policy of this
+# lab has no threshold at all. Set-DbaLogin.Tests.ps1 fails five logons on purpose, so the threshold
+# has to be 5 or lower. Only the standalone hosts are configured here, because the computer name of
+# an FCI is the cluster network name and a local policy cannot be set through that.
+$lockoutComputers = @("SQL03", "SQL04")
+$null = Invoke-Command -ComputerName $lockoutComputers -ScriptBlock { net accounts /lockoutthreshold:5 }
+
 Write-PSFMessage -Level Host -Message 'Finished'

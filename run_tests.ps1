@@ -121,6 +121,10 @@ $runStartInfo = [ordered]@{
     Type            = "RunStart"
     StartTime       = $start.ToString("yyyy-MM-dd HH:mm:ss")
     ComputerName    = $Env:COMPUTERNAME
+    # Several test files skip their integration tests on PowerShell 7, so the edition decides which
+    # tests run at all. Without it in the header, two runs of the same suite cannot be compared.
+    PSVersion       = $PSVersionTable.PSVersion.ToString()
+    PSEdition       = "$($PSVersionTable.PSEdition)"
     DbatoolsPath    = (Get-Module -Name dbatools).Path
     DbatoolsBranch  = $gitBranch
     DbatoolsCommit  = $gitCommit

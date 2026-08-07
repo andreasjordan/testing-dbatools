@@ -20,6 +20,9 @@ $results = @($lines | Where-Object { -not $_.Type -or $_.Type -eq "TestFile" })
 Write-Host "Result file: $($resultFile.FullName)"
 if ($runStart) {
     Write-Host "Started $($runStart.StartTime) on $($runStart.ComputerName) with $($runStart.ConfigFilename), scenario [$($runStart.Scenario)]"
+    if ($runStart.PSVersion) {
+        Write-Host "PowerShell $($runStart.PSVersion) ($($runStart.PSEdition)), Pester $($runStart.PesterVersion)"
+    }
     Write-Host "dbatools branch $($runStart.DbatoolsBranch) at $($runStart.DbatoolsCommit)$(if ($runStart.DbatoolsIsDirty) { " with uncommitted changes" })"
 }
 if ($runEnd) {

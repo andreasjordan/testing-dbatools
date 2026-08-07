@@ -105,6 +105,18 @@ function Get-TestFileResult {
         }
     )
 
+    # The failure message of the environment test names the objects that were left behind, because
+    # its assertions run against a list of names. Keeping only the name of the check tells us that
+    # something was left on an instance but not what, which is the part we actually need.
+    $environmentFailures = @(
+        foreach ($failedEnvironment in $EnvironmentResult.Failed) {
+            [PSCustomObject]@{
+                Name    = $failedEnvironment.ExpandedPath
+                Message = ($failedEnvironment.ErrorRecord.Exception.Message -split "`n" | ForEach-Object { $PSItem.Trim() }) -join " "
+            }
+        }
+    )
+
     # A test file must not leave dbatools imported, because the next test file has to start with
     # the module in a defined state. We import from the psm1 file, so our own import has version 0.0
     # and does not count.
@@ -123,7 +135,7 @@ function Get-TestFileResult {
         TestsFailed       = $failures
         # Filtered, because @($null) is an array with one empty element, not an empty array,
         # and that shows up in every single line of the log file.
-        EnvironmentFailed = @($EnvironmentResult.Failed.ExpandedPath | Where-Object { $_ })
+        EnvironmentFailed = $environmentFailures
         ModuleLeftLoaded  = $moduleLeftLoaded
         Warnings          = @($Warning | Where-Object { $_ })
         UsedMemoryMB      = $UsedMemoryMB

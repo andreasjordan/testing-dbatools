@@ -110,7 +110,8 @@ foreach ($result in $results | Where-Object { $_.TestsFailed -or $_.EnvironmentF
         Write-Host "          $($failedTest.Message)"
     }
     foreach ($failedEnvironment in $result.EnvironmentFailed) {
-        Write-Host "  LEFTOVER IN LAB  $failedEnvironment"
+        Write-Host "  LEFTOVER IN LAB  $($failedEnvironment.Name)"
+        Write-Host "                   $($failedEnvironment.Message)"
     }
     if ($result.ModuleLeftLoaded) {
         Write-Host "  MODULE LEFT LOADED  the test file did not remove the dbatools module"

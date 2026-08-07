@@ -57,6 +57,8 @@ $start = Get-Date
 
 Import-Module "$dbatoolsBase\dbatools.psm1" -Force
 
+. "$testingBase\Get-TestFileResult.ps1"
+
 $TestConfig = Get-TestConfig -LocalConfigPath $configFile
 if ($Config) {
     foreach ($cfg in $Config.GetEnumerator()) {
@@ -97,10 +99,85 @@ $tests = $tests | Select-Object -First $NumberOfTestsToTest -Skip $NumberOfTests
 # dbatools moved to Pester 6, the CI pins 6.0.0 in tests\appveyor.prep.ps1.
 Import-Module -Name Pester -MinimumVersion 6.0
 
+# The first line of the result file describes the run itself. Without it a result file from last
+# week cannot be attributed to a branch, a configuration or a lab any more.
+$gitBranch = $null
+$gitCommit = $null
+$gitIsDirty = $null
+try {
+    $gitBranch  = & git -C $dbatoolsBase rev-parse --abbrev-ref HEAD 2>$null
+    $gitCommit  = & git -C $dbatoolsBase rev-parse --short HEAD 2>$null
+    $gitIsDirty = [bool](& git -C $dbatoolsBase status --porcelain 2>$null)
+} catch {
+    Write-Warning -Message "Could not read the git state of $dbatoolsBase : $_"
+}
+
+$configuredInstances = [ordered]@{ }
+$TestConfig.PSObject.Properties |
+    Where-Object { $_.Name -match "^Instance" -and $_.Value -is [string] -and $_.Value } |
+    ForEach-Object { $configuredInstances[$_.Name] = $_.Value }
+
+$runStartInfo = [ordered]@{
+    Type            = "RunStart"
+    StartTime       = $start.ToString("yyyy-MM-dd HH:mm:ss")
+    ComputerName    = $Env:COMPUTERNAME
+    DbatoolsPath    = (Get-Module -Name dbatools).Path
+    DbatoolsBranch  = $gitBranch
+    DbatoolsCommit  = $gitCommit
+    DbatoolsIsDirty = $gitIsDirty
+    PesterVersion   = (Get-Module -Name Pester).Version.ToString()
+    ConfigFilename  = $ConfigFilename
+    Scenario        = $Scenario
+    TestFileCount   = @($tests).Count
+    Instances       = $configuredInstances
+    Parameters      = [ordered]@{
+        NumberOfTestsToTest      = $NumberOfTestsToTest
+        NumberOfTestsToSkip      = $NumberOfTestsToSkip
+        CommandToStartWith       = $CommandToStartWith
+        ContinueOnFailure        = [bool]$ContinueOnFailure
+        SkipEnvironmentTest      = [bool]$SkipEnvironmentTest
+        TestForWarnings          = [bool]$TestForWarnings
+        CheckSleepingConnections = [bool]$CheckSleepingConnections
+        Config                   = $Config
+    }
+}
+$runStartInfo | ConvertTo-Json -Compress -Depth 6 | Add-Content -Path $resultsFileName
+
+Write-Host "Writing results to $resultsFileName"
+
+# The last line of the result file says how the run ended. Without it a short result file cannot be
+# told apart from a run that is still going. The trap below covers a run that dies with an error.
+$runEndWritten = $false
+function Write-RunEnd {
+    param([string]$Reason)
+    if ($script:runEndWritten) {
+        return
+    }
+    $script:runEndWritten = $true
+    $runEndInfo = [ordered]@{
+        Type            = "RunEnd"
+        EndTime         = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+        DurationMinutes = [int]((Get-Date) - $start).TotalMinutes
+        TestFileCount   = @($tests).Count
+        CompletedCount  = $progressCompleted
+        StoppedEarly    = ($progressCompleted -lt @($tests).Count)
+        StopReason      = $Reason
+    }
+    $runEndInfo | ConvertTo-Json -Compress | Add-Content -Path $resultsFileName
+}
+
+trap {
+    Write-RunEnd -Reason "the run died with an error: $($_.Exception.Message)"
+    break
+}
+
 $progressParameter = @{ Id = Get-Random ; Activity = 'Running tests' }
 $progressTotal = $tests.Count
 $progressCompleted = 0
 $progressStart = Get-Date
+# Reported in the progress status before the first test has measured it.
+$usedMemory = 0
+$stopReason = $null
 foreach ($test in $tests) {
     # $test = $tests[0]
 
@@ -125,6 +202,7 @@ foreach ($test in $tests) {
     Write-Warning -Message "Running $($test.FullName)"
 
     $failure = $false
+    $warnings = $null
     $startMemory = [int]([System.GC]::GetTotalMemory($false)/1MB)
 
     $warningsFile = "$logPath\$($test.Name).warnings.txt"
@@ -140,12 +218,15 @@ foreach ($test in $tests) {
     } else {
         $resultTest = Invoke-Pester -Path $test.FullName -Output Detailed -PassThru
     }
-    if ($resultTest.FailedCount -gt 0) {
+    # Not only FailedCount: a file that throws during discovery has no failed tests at all,
+    # because it never got as far as having tests, so it would pass unnoticed here.
+    if ($resultTest.FailedCount -gt 0 -or $resultTest.Result -eq "Failed") {
         $failure = $true
     }
 
     $usedMemory = [int]([System.GC]::GetTotalMemory($false)/1MB) - $startMemory
 
+    $resultEnvironment = $null
     if (-not $SkipEnvironmentTest) {
         $resultEnvironment = Invoke-Pester -Path "$testingBase\TestEnvironment.Tests.ps1" -Output None -PassThru
         if ($resultEnvironment.Result -ne 'Passed') {
@@ -169,21 +250,19 @@ foreach ($test in $tests) {
     $sleepingProcsInfo = if ($null -ne $sleepingProcs) { "$sleepingProcs sleeping / " } else { '' }
     Write-Host "`n$((Get-Date).ToString('HH:mm:ss')) ========= $sleepingProcsInfo$usedMemory MB used / $([int]([System.GC]::GetTotalMemory($false)/1MB)) MB total ==========`n"
 
-    $resultInfo = [ordered]@{
-        TestFileName      = $test.Name
-        Result            = $( if ($resultTest.Result) { $resultTest.Result } elseif ($resultTest.FailedCount -eq 0) { 'Passed' } else { 'Failed' })
-        DurationSeconds   = $( if ($resultTest.Duration) { $resultTest.Duration.TotalSeconds } else { $resultTest.Time.TotalSeconds })
-        TotalCount        = $resultTest.TotalCount
-        PassedCount       = $resultTest.PassedCount
-        FailedCount       = $resultTest.FailedCount
-        SkippedCount      = $resultTest.SkippedCount
+    $splatTestFileResult = @{
+        PesterResult      = $resultTest
+        Path              = $test.FullName
+        EnvironmentResult = $resultEnvironment
+        Warning           = $warnings
         UsedMemoryMB      = $usedMemory
         UsedInstances     = $usedInstances
         SleepingProcs     = $sleepingProcs
-        TestsFailed       = $resultTest.Failed
-        EnvironmentFailed = $(if (-not $SkipEnvironmentTest -and $resultEnvironment.Result -ne 'Passed') { $resultEnvironment.Failed })
     }
-    $resultInfo | ConvertTo-Json -Compress | Add-Content -Path $resultsFileName
+    $resultInfo = Get-TestFileResult @splatTestFileResult
+    # Depth matters here: the default of 2 truncates every failure to "@{TargetObject=; Exception=}",
+    # which turns a finished run into a log that says what failed but not why.
+    $resultInfo | ConvertTo-Json -Compress -Depth 6 | Add-Content -Path $resultsFileName
 
 #    $null = Get-DbaConnectedInstance | Disconnect-DbaInstance
 #    Clear-DbaConnectionPool
@@ -193,10 +272,14 @@ foreach ($test in $tests) {
 
     if ($failure -and -not $ContinueOnFailure) {
         Send-Status -Message "TEST FAILED: $($test.Name)"
+        $stopReason = "stopped at the first failure: $($test.Name)"
         break
     }
     Send-Status -Message "Test $progressCompleted of $progressTotal ok: $($test.Name)"
 }
 Write-Progress @progressParameter -Completed
 
+Write-RunEnd -Reason $stopReason
+
 Write-Host "Finished $progressCompleted tests in $([int]((Get-Date) - $start).TotalMinutes) minutes"
+Write-Host "Results written to $resultsFileName"

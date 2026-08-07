@@ -78,9 +78,39 @@ This is the loop for fixing a bug or building a feature in dbatools:
 
 By default it stops at the first failure. `logs\` is gitignored except for its README.
 
+### The result file format
+
+A result file is JSON lines with three kinds of line, told apart by their `Type`:
+
+- `RunStart` (first line) — start time, machine, the dbatools branch, commit and whether the working
+  tree was dirty, the Pester version, the config file, the scenario, the instances and the parameters
+  the run was started with. Without it a result file cannot be attributed to anything afterwards.
+- `TestFile` (one per test file) — the Pester counts, the flattened failures, the lab leftovers,
+  whether the module was left loaded, and the memory, instances and sleeping connections.
+- `RunEnd` (last line) — how the run ended: completed count, duration and `StopReason`. It is also
+  written when the run stops at a failure or dies with an error, so a short result file can be told
+  apart from a run that is still going.
+
+Both runners build the `TestFile` line through `Get-TestFileResult.ps1`, which is dot-sourced for
+that single function. It is a pure function of the Pester result objects on purpose: `Invoke-Pester`
+stays in the calling script, because the test files look up `$TestConfig` through the scope chain of
+their caller and running them from inside a function would change that chain.
+
+Every failure in `TestsFailed` carries a `Source` that says where Pester recorded the detail, and all
+three have to be collected or failures are silently lost:
+
+| Source | Happens when | Where the message is |
+| --- | --- | --- |
+| `Test` | an `It` fails | on the test, with line and line text |
+| `Block` | a `BeforeAll` throws | on the block - the test is failed with a completely empty `ErrorRecord` |
+| `Container` | discovery throws | on the container - there are no tests at all, so `FailedCount` is 0 |
+
+Serialize these lines with `-Depth 6`. The `ConvertTo-Json` default of 2 truncates every failure to
+`@{TargetObject=; Exception=}`, which produces a log that says what failed but not why.
+
 ### Analysing results
 
-- `analyse_test_results.ps1` — loads the newest `logs\results_*.txt`, groups passed/failed, shows the failures. Has a deliberate `break` partway through; the lines after it are meant to be run interactively (`Out-GridView` pickers).
+- `analyse_test_results.ps1` — loads the newest `logs\results_*.txt`, prints the run header and footer, groups passed/failed, and shows every failure with its source, line and message, plus lab leftovers, a module left loaded and warnings. Result files written before the header existed still work, because a line without a `Type` is treated as a test file. Has a deliberate `break` partway through; the lines after it are meant to be run interactively (`Out-GridView` pickers). Note that the `break` also ends the script that called it.
 - `analyse_local_tests.ps1` — same idea, but loads all result files and sets up `$TestConfig` first.
 - `analyse_tests.ps1` — static analysis over the dbatools test files: which `$TestConfig.Instance*` each test uses, grouped summary to the clipboard, `-PassThru` for objects. Useful for deciding which instances a change can affect.
 

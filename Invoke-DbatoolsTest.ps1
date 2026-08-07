@@ -30,6 +30,7 @@ $testingBase  = "$githubBase\testing-dbatools"
 $logPath      = "$testingBase\logs"
 
 . "$testingBase\Initialize-LabSession.ps1" -ConfigFilename $ConfigFilename
+. "$testingBase\Get-TestFileResult.ps1"
 
 # dbatools moved to Pester 6, the CI pins 6.0.0 in tests\appveyor.prep.ps1.
 Import-Module -Name Pester -MinimumVersion 6.0
@@ -64,45 +65,31 @@ $results = foreach ($test in $tests) {
         $pesterConfig.Filter.Tag = $Tag
     }
 
-    $resultTest = Invoke-Pester -Configuration $pesterConfig
-
-    $failedTests = foreach ($failedTest in $resultTest.Failed) {
-        [PSCustomObject]@{
-            Name     = $failedTest.ExpandedPath
-            Line     = $failedTest.ErrorRecord.TargetObject.Line
-            LineText = $failedTest.ErrorRecord.TargetObject.LineText.Trim()
-            Message  = ($failedTest.ErrorRecord.Exception.Message -split "`n" | ForEach-Object { $_.Trim() }) -join ' '
-        }
-    }
+    # Every warning a test file writes is a defect. The tests run without EnableException, so a
+    # problem inside a command surfaces only as a warning, and Pester ignores those completely.
+    # A test that expects a warning has to silence it with -WarningAction and assert on $WarnVar.
+    $warningsFile = "$logPath\$($test.Name).warnings.txt"
+    $resultTest = Invoke-Pester -Configuration $pesterConfig 3> $warningsFile
+    $warnings = @(Get-Content -Path $warningsFile | Where-Object { $PSItem })
+    Remove-Item -Path $warningsFile -ErrorAction SilentlyContinue
 
     # Leftovers in the lab break the tests that run afterwards,
     # so we want to know which test file caused them.
-    $environmentFailed = $null
+    $resultEnvironment = $null
     if (-not $SkipEnvironmentTest) {
         $resultEnvironment = Invoke-Pester -Path "$testingBase\TestEnvironment.Tests.ps1" -Output None -PassThru
-        $environmentFailed = $resultEnvironment.Failed.ExpandedPath
     }
 
-    # A test file must not leave dbatools imported, because the next test file
-    # has to start with the module in a defined state.
-    # We import from the psm1 file, so our own import has version 0.0 and does not count.
-    $moduleLeftLoaded = [bool](Get-Module -Name dbatools | Where-Object { $_.Version.Major -gt 0 })
-
-    [PSCustomObject]@{
-        TestFileName      = $test.Name
-        Result            = $resultTest.Result
-        DurationSeconds   = [int]$resultTest.Duration.TotalSeconds
-        TotalCount        = $resultTest.TotalCount
-        PassedCount       = $resultTest.PassedCount
-        FailedCount       = $resultTest.FailedCount
-        SkippedCount      = $resultTest.SkippedCount
-        TestsFailed       = $failedTests
-        EnvironmentFailed = $environmentFailed
-        ModuleLeftLoaded  = $moduleLeftLoaded
+    $splatTestFileResult = @{
+        PesterResult      = $resultTest
+        Path              = $test.FullName
+        EnvironmentResult = $resultEnvironment
+        Warning           = $warnings
     }
+    Get-TestFileResult @splatTestFileResult
 }
 
-$results | ForEach-Object { $_ | ConvertTo-Json -Compress -Depth 5 | Add-Content -Path $resultsFileName }
+$results | ForEach-Object { $_ | ConvertTo-Json -Compress -Depth 6 | Add-Content -Path $resultsFileName }
 
 
 # Report
@@ -111,11 +98,15 @@ Write-Host "`n$('=' * 60)"
 Write-Host "Ran $(@($results).Count) test files in $([int]((Get-Date) - $start).TotalSeconds) seconds"
 $results | Format-Table -Property TestFileName, Result, TotalCount, PassedCount, FailedCount, SkippedCount, DurationSeconds -AutoSize
 
-foreach ($result in $results | Where-Object { $_.TestsFailed -or $_.EnvironmentFailed -or $_.ModuleLeftLoaded }) {
+foreach ($result in $results | Where-Object { $_.TestsFailed -or $_.EnvironmentFailed -or $_.ModuleLeftLoaded -or $_.Warnings }) {
     Write-Host "$($result.TestFileName)" -ForegroundColor Yellow
     foreach ($failedTest in $result.TestsFailed) {
-        Write-Host "  FAILED  $($failedTest.Name)"
-        Write-Host "          line $($failedTest.Line): $($failedTest.LineText)"
+        # Source tells us where Pester put the details: on the test, on the block (a failing
+        # BeforeAll) or on the container (the file did not even get through discovery).
+        Write-Host "  FAILED ($($failedTest.Source))  $($failedTest.Name)"
+        if ($failedTest.Line) {
+            Write-Host "          line $($failedTest.Line): $($failedTest.LineText)"
+        }
         Write-Host "          $($failedTest.Message)"
     }
     foreach ($failedEnvironment in $result.EnvironmentFailed) {
@@ -123,6 +114,9 @@ foreach ($result in $results | Where-Object { $_.TestsFailed -or $_.EnvironmentF
     }
     if ($result.ModuleLeftLoaded) {
         Write-Host "  MODULE LEFT LOADED  the test file did not remove the dbatools module"
+    }
+    foreach ($warning in $result.Warnings) {
+        Write-Host "  WARNING  $warning"
     }
 }
 

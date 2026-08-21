@@ -23,6 +23,8 @@ function Get-TestFileResult {
         # Values only run_tests.ps1 measures. They are always part of the output, so that both
         # runners write the same set of keys and one analysis works for both log files.
         [object]$UsedMemoryMB,
+        [object]$UsedPrivateMB,
+        [object]$ProcessPrivateMB,
         [object]$UsedInstances,
         [object]$SleepingProcs
     )
@@ -139,6 +141,11 @@ function Get-TestFileResult {
         ModuleLeftLoaded  = $moduleLeftLoaded
         Warnings          = @($Warning | Where-Object { $_ })
         UsedMemoryMB      = $UsedMemoryMB
+        # The managed heap is only part of the picture: SMO, SqlClient and the loaded assemblies
+        # live outside it. ProcessPrivateMB is the absolute private bytes of the runner after the
+        # test file, so a long run shows whether it grows without giving the memory back.
+        UsedPrivateMB     = $UsedPrivateMB
+        ProcessPrivateMB  = $ProcessPrivateMB
         UsedInstances     = @($UsedInstances | Where-Object { $_ })
         SleepingProcs     = $SleepingProcs
     }

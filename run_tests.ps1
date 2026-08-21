@@ -208,6 +208,7 @@ foreach ($test in $tests) {
     $failure = $false
     $warnings = $null
     $startMemory = [int]([System.GC]::GetTotalMemory($false)/1MB)
+    $startPrivateMB = [int]((Get-Process -Id $PID).PrivateMemorySize64/1MB)
 
     $warningsFile = "$logPath\$($test.Name).warnings.txt"
     if ($TestForWarnings) {
@@ -229,6 +230,12 @@ foreach ($test in $tests) {
     }
 
     $usedMemory = [int]([System.GC]::GetTotalMemory($false)/1MB) - $startMemory
+
+    # The managed heap that $usedMemory measures is only part of the picture: SMO, SqlClient and the
+    # loaded assemblies live outside it. So we also record the private bytes of the whole runner,
+    # which is the number that shows whether a long run grows without giving the memory back.
+    $processPrivateMB = [int]((Get-Process -Id $PID).PrivateMemorySize64/1MB)
+    $usedPrivateMB = $processPrivateMB - $startPrivateMB
 
     $resultEnvironment = $null
     if (-not $SkipEnvironmentTest) {
@@ -252,7 +259,7 @@ foreach ($test in $tests) {
     }
 
     $sleepingProcsInfo = if ($null -ne $sleepingProcs) { "$sleepingProcs sleeping / " } else { '' }
-    Write-Host "`n$((Get-Date).ToString('HH:mm:ss')) ========= $sleepingProcsInfo$usedMemory MB used / $([int]([System.GC]::GetTotalMemory($false)/1MB)) MB total ==========`n"
+    Write-Host "`n$((Get-Date).ToString("HH:mm:ss")) ========= $sleepingProcsInfo$usedMemory MB used / $([int]([System.GC]::GetTotalMemory($false)/1MB)) MB total / $processPrivateMB MB private ==========`n"
 
     $splatTestFileResult = @{
         PesterResult      = $resultTest
@@ -260,6 +267,8 @@ foreach ($test in $tests) {
         EnvironmentResult = $resultEnvironment
         Warning           = $warnings
         UsedMemoryMB      = $usedMemory
+        UsedPrivateMB     = $usedPrivateMB
+        ProcessPrivateMB  = $processPrivateMB
         UsedInstances     = $usedInstances
         SleepingProcs     = $sleepingProcs
     }

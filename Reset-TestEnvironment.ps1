@@ -29,26 +29,33 @@ $instances = $TestConfig.PSObject.Properties |
 
 # Windows failover clusters
 #
-# Nothing here is removed automatically. Cluster drift is rare, and putting a disk back or moving the
-# quorum needs a judgement call that a cleanup script should not make on its own. So we only report
-# it: add_cluster_test_objects.ps1 is idempotent and recreates whatever is missing.
+# Nothing here is repaired automatically. Putting a disk back or moving the quorum needs a judgement
+# call that a cleanup script should not make on its own, so we only report the drift and say what
+# restores it. Every Wsfc command of dbatools is a Get command, so a test run cannot cause any of
+# this: it means someone has changed the cluster, or the lab was built without the fixtures.
 
 $clusters = @($TestConfig.ClusterStorage, $TestConfig.ClusterWitness) | Where-Object { $_ }
 foreach ($clusterName in $clusters) {
     # $clusterName = $clusters[0]
     $clusterInfo = Get-DbaWsfcCluster -ComputerName $clusterName
-    $expectedQuorumType = if ($clusterName -eq $TestConfig.ClusterWitness) { 'Node and File Share Majority' } else { 'Node and Disk Majority' }
+    if ($clusterName -eq $TestConfig.ClusterWitness) {
+        $expectedQuorumType = 'Node and File Share Majority'
+        $quorumRepair = "Set-ClusterQuorum -Cluster $clusterName -NodeAndFileShareMajority '$($TestConfig.ClusterWitnessPath)'"
+    } else {
+        $expectedQuorumType = 'Node and Disk Majority'
+        $quorumRepair = "Set-ClusterQuorum -Cluster $clusterName -NodeAndDiskMajority 'Cluster Disk Quorum'"
+    }
     if ($clusterInfo.QuorumType -ne $expectedQuorumType) {
-        Write-Warning "Cluster $clusterName uses quorum type '$($clusterInfo.QuorumType)' but should use '$expectedQuorumType'. Run add_cluster_test_objects.ps1 to restore it."
+        Write-Warning "Cluster $clusterName uses quorum type '$($clusterInfo.QuorumType)' but should use '$expectedQuorumType'. Restore it with: $quorumRepair"
     }
     if ($clusterName -eq $TestConfig.ClusterStorage) {
         $volumeCount = @(Get-DbaWsfcSharedVolume -ComputerName $clusterName).Count
         if ($volumeCount -ne 1) {
-            Write-Warning "Cluster $clusterName has $volumeCount cluster shared volumes but should have 1. Run add_cluster_test_objects.ps1 to restore it."
+            Write-Warning "Cluster $clusterName has $volumeCount cluster shared volumes but should have 1. Restore it with: Add-ClusterSharedVolume -Cluster $clusterName -Name 'Cluster Disk CSV'"
         }
         $availableDiskCount = @(Get-DbaWsfcAvailableDisk -ComputerName $clusterName).Count
         if ($availableDiskCount -ne 1) {
-            Write-Warning "Cluster $clusterName has $availableDiskCount available disks but should have 1. A test has probably added the disk to the cluster."
+            Write-Warning "Cluster $clusterName has $availableDiskCount available disks but should have 1. The disk that Get-DbaWsfcAvailableDisk needs has been added to the cluster and has to be removed from it again."
         }
     }
 }

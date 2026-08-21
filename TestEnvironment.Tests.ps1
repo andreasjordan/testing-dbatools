@@ -39,7 +39,8 @@ Describe "the cluster <_>" -ForEach $cluster {
     }
 
     It "Has the expected quorum type" {
-        # A test that changes the quorum leaves every later run guessing, so this is worth asserting.
+        # No dbatools command changes a quorum, but a cluster that came up with the wrong one leaves
+        # every later run guessing, so this is worth asserting.
         $expectedQuorumType = if ($PSItem -eq $TestConfig.ClusterWitness) { "Node and File Share Majority" } else { "Node and Disk Majority" }
         $clusterInfo.QuorumType | Should -Be $expectedQuorumType
     }
@@ -59,7 +60,8 @@ Describe "the cluster <_>" -ForEach $cluster {
 
     It "Has exactly one available disk" -Skip:($PSItem -ne $TestConfig.ClusterStorage) {
         # The disk exists only so that Get-DbaWsfcAvailableDisk has something to return.
-        # A test that adds it to the cluster takes that fixture away from every later run.
+        # Once it is added to the cluster the fixture is gone for every later run, and nothing puts
+        # it back on its own.
         $clusterAvailableDisk | Should -HaveCount 1
     }
 

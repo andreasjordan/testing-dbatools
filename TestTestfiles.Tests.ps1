@@ -7,7 +7,7 @@ param(
 )
 
 BeforeDiscovery {
-    # Every test file is checked, not just the *-Dba* ones. The four below are the only files in
+    # Every test file is checked, not just the *-Dba* ones. The five below are the only files in
     # tests\ that are not the test of a single command, so they cannot follow the layout.
     # Everything else - including the tests of private functions like Stop-Function - can and does.
     $notACommandTest = @(
@@ -15,6 +15,7 @@ BeforeDiscovery {
         'dbatools.Tests.ps1'
         'InModule.Commands.Tests.ps1'
         'InModule.Help.Tests.ps1'
+        'InModule.TypeExtensions.Tests.ps1'
     )
     $testFile = Get-ChildItem -Path "$TestPath\*.Tests.ps1" |
         Where-Object { $PSItem.Name -notin $notACommandTest } |

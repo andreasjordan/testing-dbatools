@@ -39,6 +39,12 @@ $config['appveyorlabrepo'] = "\\fs\appveyor-lab"
 
 $config['Temp'] = "\\fs\Temp"
 
+# The Windows failover clusters of the lab, used by the Get-DbaWsfc* tests.
+# Leave these empty in a configuration whose lab has no cluster - the tests skip themselves then.
+$config['ClusterStorage'] = "CLUSTER01"   # shared storage: disk witness, one CSV, one available disk, two FCIs
+$config['ClusterWitness'] = "CLUSTER02"   # no shared storage: file share witness, availability groups
+$config['ClusterWitnessPath'] = "\\fs\ClusterWitness02"
+
 # Expectations used by TestEnvironment.Tests.ps1 to verify that the lab is still in its initial state.
 # These have to match what 06_configure_instances.ps1 sets up.
 $config['ExpectedTcpPort'] = @{

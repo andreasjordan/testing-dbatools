@@ -15,6 +15,9 @@ BeforeDiscovery {
         Where-Object { $_.Name -match '^Instance' -and $_.Name -notin $excludedKeys -and $_.Value -is [string] -and $_.Value } |
         ForEach-Object { $_.Value } |
         Sort-Object -Unique
+
+    # The failover clusters of the lab, if the configuration knows about any.
+    $cluster = @($TestConfig.ClusterStorage, $TestConfig.ClusterWitness) | Where-Object { $_ }
 }
 
 Describe "the temporary files" {
@@ -24,6 +27,45 @@ Describe "the temporary files" {
 
     It "Has no files in new temp folder" {
         Get-ChildItem -Path $TestConfig.Temp | Should -BeNullOrEmpty
+    }
+}
+
+Describe "the cluster <_>" -ForEach $cluster {
+    BeforeAll {
+        $clusterInfo = Get-DbaWsfcCluster -ComputerName $PSItem
+        $clusterResource = Get-DbaWsfcResource -ComputerName $PSItem
+        $clusterVolume = Get-DbaWsfcSharedVolume -ComputerName $PSItem
+        $clusterAvailableDisk = Get-DbaWsfcAvailableDisk -ComputerName $PSItem
+    }
+
+    It "Has the expected quorum type" {
+        # A test that changes the quorum leaves every later run guessing, so this is worth asserting.
+        $expectedQuorumType = if ($PSItem -eq $TestConfig.ClusterWitness) { "Node and File Share Majority" } else { "Node and Disk Majority" }
+        $clusterInfo.QuorumType | Should -Be $expectedQuorumType
+    }
+
+    It "Has the expected witness" {
+        if ($PSItem -eq $TestConfig.ClusterWitness) {
+            $witness = $clusterResource | Where-Object Type -eq "File Share Witness"
+            $witness.PrivateProperties.SharePath | Should -Be $TestConfig.ClusterWitnessPath
+        } else {
+            ($clusterResource | Where-Object Name -eq "Cluster Disk Quorum").State | Should -Be "Online"
+        }
+    }
+
+    It "Has exactly one cluster shared volume" -Skip:($PSItem -ne $TestConfig.ClusterStorage) {
+        $clusterVolume | Should -HaveCount 1
+    }
+
+    It "Has exactly one available disk" -Skip:($PSItem -ne $TestConfig.ClusterStorage) {
+        # The disk exists only so that Get-DbaWsfcAvailableDisk has something to return.
+        # A test that adds it to the cluster takes that fixture away from every later run.
+        $clusterAvailableDisk | Should -HaveCount 1
+    }
+
+    It "Has no offline resource" {
+        $offlineResources = ($clusterResource | Where-Object State -ne "Online").Name
+        $offlineResources | Should -BeNullOrEmpty
     }
 }
 

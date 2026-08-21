@@ -29,6 +29,21 @@ $config = @{
                     Size        = 20GB
                     DriveLetter = 'T'
                 }
+                @{
+                    # Becomes the cluster shared volume, so it needs no drive letter of its own.
+                    Name        = 'CSV'
+                    Size        = 5GB
+                    DriveLetter = $null
+                }
+                @{
+                    # The disk that Get-DbaWsfcAvailableDisk is supposed to return, so it must stay
+                    # outside of the cluster. It is mapped to the target only after the cluster has
+                    # been created, because New-Cluster adds every eligible disk it can see.
+                    Name            = 'Available'
+                    Size            = 1GB
+                    DriveLetter     = $null
+                    MapAfterCluster = $true
+                }
             )
         }
     )
@@ -75,7 +90,9 @@ foreach ($target in $config.Targets) {
         $null = $partition | Format-Volume -FileSystem NTFS -NewFileSystemLabel $disk.Name
         $null = Dismount-DiskImage -CimSession $cimSession -ImagePath $diskPath
 
-        $null = Add-IscsiVirtualDiskTargetMapping -ComputerName $config.StorageServer -TargetName $target.Name -Path $diskPath
+        if (-not $disk.MapAfterCluster) {
+            $null = Add-IscsiVirtualDiskTargetMapping -ComputerName $config.StorageServer -TargetName $target.Name -Path $diskPath
+        }
     }
     $initiatorIds = @( )
     foreach ($node in $target.Nodes) {
@@ -97,7 +114,9 @@ foreach ($target in $config.Targets) {
         Get-Disk -CimSession $cimSession | Where-Object IsOffline | Set-Disk -IsOffline $false
         foreach ($disk in $target.Disks) {
             # $disk = $target.Disks[0]
-            # "$partition | Set-Partition" does not work if $partition has an empty drive letter - so we need a workaround
+            # The cluster shared volume and the disk outside of the cluster get no drive letter.
+            if ($null -eq $disk.DriveLetter) { continue }
+            # "$partition | Set-Partition" does not work if $partition has an empty drive letter - so we address the partition by disk and partition number instead
             $partition = Get-Volume -CimSession $cimSession -FileSystemLabel $disk.Name | Get-Partition
             if ($partition.DriveLetter -ne $disk.DriveLetter) {
                 Set-Partition -CimSession $cimSession -DiskNumber $partition.DiskNumber -PartitionNumber $partition.PartitionNumber -NewDriveLetter $disk.DriveLetter
@@ -136,6 +155,29 @@ foreach ($clusterDisk in $clusterDisks) {
     # $clusterDisk = $clusterDisks[0]
     $partition = $clusterDisk | Get-CimAssociatedInstance -ResultClassName MSCluster_DiskPartition
     $null = $clusterDisk | Invoke-CimMethod -MethodName Rename -Arguments @{ newName = "Cluster Disk $($partition.VolumeLabel)" }
+}
+
+Write-PSFMessage -Level Host -Message 'Set the quorum disk explicitly'
+# New-Cluster picks a witness disk on its own. Naming it here keeps the lab reproducible and makes
+# the quorum configuration visible to anyone reading this script.
+$null = Set-ClusterQuorum -Cluster $config.ClusterName -NodeAndDiskMajority 'Cluster Disk Quorum'
+
+Write-PSFMessage -Level Host -Message 'Create the cluster shared volume'
+$null = Add-ClusterSharedVolume -Cluster $config.ClusterName -Name 'Cluster Disk CSV'
+
+Write-PSFMessage -Level Host -Message 'Map the disk that stays outside of the cluster'
+# Mapped only now, so that New-Cluster could not add it to the cluster above.
+foreach ($target in $config.Targets) {
+    # $target = $config.Targets[0]
+    foreach ($disk in ($target.Disks | Where-Object MapAfterCluster)) {
+        # $disk = $target.Disks[-1]
+        $diskPath = "$($config.StoragePath)\$($disk.Name).vhdx"
+        $null = Add-IscsiVirtualDiskTargetMapping -ComputerName $config.StorageServer -TargetName $target.Name -Path $diskPath
+    }
+}
+foreach ($node in $ClusterNodes) {
+    # $node = $ClusterNodes[0]
+    Update-HostStorageCache -CimSession $node
 }
 
 Write-PSFMessage -Level Host -Message 'Grant rights to cluster'

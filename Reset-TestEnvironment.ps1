@@ -27,6 +27,33 @@ $instances = $TestConfig.PSObject.Properties |
     Sort-Object -Unique
 
 
+# Windows failover clusters
+#
+# Nothing here is removed automatically. Cluster drift is rare, and putting a disk back or moving the
+# quorum needs a judgement call that a cleanup script should not make on its own. So we only report
+# it: add_cluster_test_objects.ps1 is idempotent and recreates whatever is missing.
+
+$clusters = @($TestConfig.ClusterStorage, $TestConfig.ClusterWitness) | Where-Object { $_ }
+foreach ($clusterName in $clusters) {
+    # $clusterName = $clusters[0]
+    $clusterInfo = Get-DbaWsfcCluster -ComputerName $clusterName
+    $expectedQuorumType = if ($clusterName -eq $TestConfig.ClusterWitness) { 'Node and File Share Majority' } else { 'Node and Disk Majority' }
+    if ($clusterInfo.QuorumType -ne $expectedQuorumType) {
+        Write-Warning "Cluster $clusterName uses quorum type '$($clusterInfo.QuorumType)' but should use '$expectedQuorumType'. Run add_cluster_test_objects.ps1 to restore it."
+    }
+    if ($clusterName -eq $TestConfig.ClusterStorage) {
+        $volumeCount = @(Get-DbaWsfcSharedVolume -ComputerName $clusterName).Count
+        if ($volumeCount -ne 1) {
+            Write-Warning "Cluster $clusterName has $volumeCount cluster shared volumes but should have 1. Run add_cluster_test_objects.ps1 to restore it."
+        }
+        $availableDiskCount = @(Get-DbaWsfcAvailableDisk -ComputerName $clusterName).Count
+        if ($availableDiskCount -ne 1) {
+            Write-Warning "Cluster $clusterName has $availableDiskCount available disks but should have 1. A test has probably added the disk to the cluster."
+        }
+    }
+}
+
+
 # Temporary folders
 
 $tempPaths = @($TestConfig.Temp)

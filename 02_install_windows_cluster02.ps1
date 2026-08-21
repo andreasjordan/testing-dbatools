@@ -2,7 +2,11 @@
 param (
     [string]$ClusterName = 'CLUSTER02',
     [string[]]$ClusterNodes = @('SQL03', 'SQL04'),
-    [string]$ClusterIP = '192.168.3.80'
+    [string]$ClusterIP = '192.168.3.80',
+    [string]$WitnessServer = 'dc.ordix.local',
+    [string]$WitnessPath = 'C:\FileServer\ClusterWitness\CLUSTER02',
+    [string]$WitnessShare = 'ClusterWitness02',
+    [string]$WitnessUnc = '\\fs\ClusterWitness02'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -29,6 +33,28 @@ $null = $cluster | Start-ClusterResource -Name 'Cluster Name'
 
 Write-PSFMessage -Level Host -Message 'Rename cluster network for client access'
 ($cluster | Get-ClusterNetwork | Where-Object { $_.Role -eq 'ClusterAndClient' }).Name = 'Cluster Network Public'
+
+Write-PSFMessage -Level Host -Message 'Create the file share witness'
+# A two node cluster without a witness loses quorum as soon as one node reboots, so this is worth
+# having on its own. It is also the only file share witness in the lab, and therefore the fixture
+# for the witness path that Get-DbaWsfcCluster reports.
+$witnessAccount = '{0}\{1}$' -f (Get-ADDomain).NetBIOSName, $ClusterName
+Invoke-Command -ComputerName $WitnessServer -ArgumentList $WitnessPath, $WitnessShare, $witnessAccount -ScriptBlock {
+    Param([string]$Path, [string]$Share, [string]$Account)
+    if (-not (Test-Path -Path $Path)) {
+        $null = New-Item -Path $Path -ItemType Directory
+    }
+    $null = New-SmbShare -Name $Share -Path $Path -FullAccess $Account
+    $acl = Get-Acl -Path $Path
+    $rule = New-Object -TypeName System.Security.AccessControl.FileSystemAccessRule -ArgumentList $Account, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow'
+    $acl.AddAccessRule($rule)
+    Set-Acl -Path $Path -AclObject $acl
+}
+
+# Set-ClusterQuorum resolves the UNC path in the context of whoever calls it, so this has to run
+# here and not through Invoke-Command on a node: a remote session has no credentials for the
+# second hop to the file server and the path validation fails with a misleading error.
+$null = Set-ClusterQuorum -Cluster $ClusterName -NodeAndFileShareMajority $WitnessUnc
 
 Write-PSFMessage -Level Host -Message 'Grant rights to cluster'
 $adComputerGUID = [GUID]::new('bf967a86-0de6-11d0-a285-00aa003049e2')

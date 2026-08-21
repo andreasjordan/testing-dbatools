@@ -92,6 +92,31 @@ Describe "the instance <_>" -ForEach $instance {
         $userDatabaseNames | Should -BeNullOrEmpty
     }
 
+    It "Has no system database with an open log chain" {
+        # A full backup of a system database in the full recovery model starts its log chain. If no
+        # log backup ever follows, the log can never be reused and grows a little on every test run.
+        # That growth is in the file size, so a restart does not undo it, and it surfaces much later
+        # as a completely unrelated failure: a new database's log is never smaller than model's, so
+        # New-DbaDatabase.Tests.ps1 fails its log size assertion once model's log passes 32 MB.
+        # Backup-DbaDatabase.Tests.ps1 did exactly this to model on InstanceCopy1 until 2026-08-15.
+        #
+        # last_log_backup_lsn is NULL while a database has never had a full backup ("pseudo-simple")
+        # and is set the moment one runs, so this fails for the test file that started the chain.
+        # Do not use log_reuse_wait_desc or SMO's LogReuseWaitStatus instead: both still read NOTHING
+        # directly after the backup and only turn to LOG_BACKUP once enough log has accumulated,
+        # which would blame whichever test file happens to run later.
+        $queryOpenLogChain = @"
+SELECT d.name AS DbName
+FROM sys.databases AS d
+JOIN sys.database_recovery_status AS rs ON rs.database_id = d.database_id
+WHERE d.name IN (N'master', N'model', N'msdb')
+  AND d.recovery_model_desc <> 'SIMPLE'
+  AND rs.last_log_backup_lsn IS NOT NULL
+"@
+        $openLogChainDatabases = (Invoke-DbaQuery -SqlInstance $server -Database master -Query $queryOpenLogChain).DbName
+        $openLogChainDatabases | Should -BeNullOrEmpty
+    }
+
     It "Has no mirroring endpoints" {
         $mirroringEndpointNames = ($server.Endpoints | Where-Object EndpointType -eq DatabaseMirroring).Name
         $mirroringEndpointNames | Should -BeNullOrEmpty

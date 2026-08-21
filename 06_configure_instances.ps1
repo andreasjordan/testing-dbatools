@@ -2,7 +2,10 @@
 param (
     [string[]]$SqlInstances = @('FCI01', 'FCI02\SQL2022', 'SQL03\SQL2025', 'SQL03\SQL2022', 'SQL03\SQL2019', 'SQL04\SQL2025', 'SQL04\SQL2022', 'SQL04\SQL2019'),
     [string[]]$HadrInstances = @('SQL03\SQL2025', 'SQL04\SQL2025'),
-    [string[]]$ServiceInstances = @('SQL03\SQL2022')
+    [string[]]$ServiceInstances = @('SQL03\SQL2022'),
+    # Hosts whose local account lockout threshold is verified after the policy has been applied.
+    # The policy itself is linked to the OU, so every host in it gets the threshold either way.
+    [string[]]$LockoutComputers = @('SQL03', 'SQL04')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -21,13 +24,17 @@ Write-PSFMessage -Level Host -Message 'Configuration for advanced encryption tes
 $null = Set-DbaSpConfigure -SqlInstance $SqlInstances -Name ExtensibleKeyManagementEnabled -Value $true
 Invoke-DbaQuery -SqlInstance $SqlInstances -Query "CREATE CRYPTOGRAPHIC PROVIDER dbatoolsci_AKV FROM FILE = '\\fs\appveyor-lab\keytests\ekm\Microsoft.AzureKeyVaultService.EKM.dll'"
 
-Write-PSFMessage -Level Host -Message 'Configuration for Availability Group tests'
-$null = Enable-DbaAgHadr -SqlInstance $HadrInstances -Force
-$null = New-DbaDbCertificate -SqlInstance $HadrInstances[0] -Name dbatoolsci_AGCert -Subject 'AG Certificate'
-$null = Copy-DbaDbCertificate -Source $HadrInstances[0] -Destination $HadrInstances[1] -Certificate dbatoolsci_AGCert -SharedPath \\fs\Temp -Confirm:$false
+if ($HadrInstances) {
+    Write-PSFMessage -Level Host -Message 'Configuration for Availability Group tests'
+    $null = Enable-DbaAgHadr -SqlInstance $HadrInstances -Force
+    $null = New-DbaDbCertificate -SqlInstance $HadrInstances[0] -Name dbatoolsci_AGCert -Subject 'AG Certificate'
+    $null = Copy-DbaDbCertificate -Source $HadrInstances[0] -Destination $HadrInstances[1] -Certificate dbatoolsci_AGCert -SharedPath \\fs\Temp -Confirm:$false
+}
 
-Write-PSFMessage -Level Host -Message 'Configuration for service configuration tests'
-$null = Set-DbaNetworkConfiguration -SqlInstance $ServiceInstances -StaticPortForIPAll 14333 -RestartService -Confirm:$false
+if ($ServiceInstances) {
+    Write-PSFMessage -Level Host -Message 'Configuration for service configuration tests'
+    $null = Set-DbaNetworkConfiguration -SqlInstance $ServiceInstances -StaticPortForIPAll 14333 -RestartService -Confirm:$false
+}
 
 Write-PSFMessage -Level Host -Message "Configuration for login lockout tests"
 # A SQL login can only be locked out when the host running the instance has an account lockout
@@ -101,8 +108,7 @@ Revision=1
 }
 
 # The policy only reaches the hosts on the next refresh, so pull it now and check it arrived.
-$lockoutComputers = @("SQL03", "SQL04")
-$lockoutState = Invoke-Command -ComputerName $lockoutComputers -ScriptBlock {
+$lockoutState = Invoke-Command -ComputerName $LockoutComputers -ScriptBlock {
     $null = gpupdate /target:computer /force
     [PSCustomObject]@{
         Computer  = $env:COMPUTERNAME

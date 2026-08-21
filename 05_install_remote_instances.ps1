@@ -1,7 +1,12 @@
 [CmdletBinding()]
 param (
     [string[]]$SqlNodes = @('SQL03', 'SQL04'),
-    [string[]]$SqlInstances = @('SQL2025', 'SQL2022', 'SQL2019')
+    [string[]]$SqlInstances = @('SQL2025', 'SQL2022', 'SQL2019'),
+    # Collation of master, which is what decides whether database and object names are case sensitive.
+    # Empty means the setup default, SQL_Latin1_General_CP1_CI_AS, which is what SQL03 and SQL04 have.
+    # SQL05 is installed with SQL_Latin1_General_CP1_CS_AS so that case sensitive behaviour can be
+    # tested at all - see the case sensitivity finding on dbatools PR #10579.
+    [string]$SqlCollation
 )
 
 $ErrorActionPreference = 'Stop'
@@ -25,6 +30,10 @@ $instanceParams = @{
     Restart            = $true
     Credential         = $installCredential
     Confirm            = $false
+}
+
+if ($SqlCollation) {
+    $instanceParams.SqlCollation = $SqlCollation
 }
 
 foreach ($sqlInstance in $SqlInstances) {

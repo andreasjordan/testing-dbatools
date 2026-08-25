@@ -15,6 +15,7 @@ BeforeDiscovery {
         'dbatools.Tests.ps1'
         'InModule.Commands.Tests.ps1'
         'InModule.Help.Tests.ps1'
+        'InModule.RestoreDatabaseContext.Tests.ps1'
         'InModule.TypeExtensions.Tests.ps1'
     )
     $testFile = Get-ChildItem -Path "$TestPath\*.Tests.ps1" |

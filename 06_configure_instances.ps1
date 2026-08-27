@@ -123,4 +123,26 @@ foreach ($state in $lockoutState) {
     }
 }
 
+Write-PSFMessage -Level Host -Message "Configuration for Kerberos double hop tests"
+# A linked server between instances on different hosts is a Kerberos double hop: the first
+# instance must forward the identity of the caller to the second one. Without delegation rights
+# on the service account the forwarded context degrades to anonymous and the target instance
+# fails the login as NT AUTHORITY\ANONYMOUS LOGON. Instances on the same host never hit this,
+# which is why only instance sets that pair two hosts as InstanceMulti1 and InstanceMulti2
+# notice it, through Test-DbaLinkedServerConnection.Tests.ps1.
+#
+# Every instance runs under the same gMSA, so resource based constrained delegation from the
+# account to itself covers every pair of instances in both directions, including instances and
+# FCIs that do not exist yet. Unlike msDS-AllowedToDelegateTo this needs no SPN list, which
+# would go stale whenever an instance with a dynamic port registers a new port at startup.
+$sqlServiceAccount = "gMSA-SQLServer"
+$serviceAccount = Get-ADServiceAccount -Identity $sqlServiceAccount -Properties PrincipalsAllowedToDelegateToAccount
+if ($serviceAccount.PrincipalsAllowedToDelegateToAccount -contains $serviceAccount.DistinguishedName) {
+    Write-PSFMessage -Level Host -Message "Resource based constrained delegation for $sqlServiceAccount is already configured"
+} else {
+    $delegationPrincipals = @($serviceAccount.PrincipalsAllowedToDelegateToAccount | Where-Object { $PSItem }) + $serviceAccount.DistinguishedName
+    Set-ADServiceAccount -Identity $sqlServiceAccount -PrincipalsAllowedToDelegateToAccount $delegationPrincipals
+    Write-PSFMessage -Level Host -Message "Resource based constrained delegation for $sqlServiceAccount is now configured"
+}
+
 Write-PSFMessage -Level Host -Message 'Finished'

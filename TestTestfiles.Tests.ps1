@@ -7,11 +7,12 @@ param(
 )
 
 BeforeDiscovery {
-    # Every test file is checked, not just the *-Dba* ones. The five below are the only files in
+    # Every test file is checked, not just the *-Dba* ones. The files below are the only ones in
     # tests\ that are not the test of a single command, so they cannot follow the layout.
     # Everything else - including the tests of private functions like Stop-Function - can and does.
     $notACommandTest = @(
         'appveyor.common.Tests.ps1'
+        'appveyor.watchdog.Tests.ps1'
         'dbatools.Tests.ps1'
         'InModule.Commands.Tests.ps1'
         'InModule.Help.Tests.ps1'
@@ -57,7 +58,10 @@ Describe "the test file <_.Name>" -ForEach $testFile {
                 }, $true)
         }
 
-        $commandName = $PSItem.Name -replace '\.Tests\.ps1$', ''
+        # Multi-part files (Connect-DbaInstance.WindowsSspi.Tests.ps1) test the command before the first
+        # dot - the same rule the CI selection in dbatools\tests\appveyor.common.ps1 applies.
+        $commandName = $PSItem.Name -replace '^([^.]+)(\..+)?\.Tests\.ps1$', '$1'
+        $isSupplementaryFile = $PSItem.Name -match '^[^.]+\..+\.Tests\.ps1$'
 
         $tokens = $null
         $errors = $null
@@ -210,6 +214,9 @@ Describe "the test file <_.Name>" -ForEach $testFile {
     }
 
     It "Has at least one Describe block for the unit tests" {
+        if ($isSupplementaryFile -and -not $unitTestBlocks) {
+            Set-ItResult -Skipped -Because "$($PSItem.Name) supplements the main test file of $commandName, which carries the unit tests"
+        }
         $unitTestBlocks | Should -Not -BeNullOrEmpty
     }
 
@@ -319,6 +326,20 @@ Describe "the test files as a whole" {
     BeforeAll {
         $manifest = Import-PowerShellDataFile -Path $ManifestPath
         $testedCommands = (Get-ChildItem -Path "$TestPath\*.Tests.ps1").Name -replace '\.Tests\.ps1$', ''
+    }
+
+    It "Assigns every test file to at most one autodetect scenario" {
+        # Get-TestsForScenario in dbatools\tests\appveyor.common.ps1 excludes a file that also matches a
+        # second scenario's instance string - from BOTH scenarios. A file referencing InstanceSingle and
+        # InstanceMulti therefore runs in no scenario-scoped lane at all. Found 2026-08-28 with
+        # New-DbaDatabase and Install-DbaCommunitySoftware; this keeps it from coming back.
+        $scanStrings = '$TestConfig.InstanceSingle', '$TestConfig.InstanceMulti', '$TestConfig.InstanceCopy', '$TestConfig.InstanceHadr', '$TestConfig.InstanceRestart'
+        $multiScenario = foreach ($file in Get-ChildItem -Path "$TestPath\*.Tests.ps1") {
+            $raw = Get-Content -Path $file.FullName -Raw
+            $matched = @($scanStrings | Where-Object { $raw -like "*$PSItem*" })
+            if ($matched.Count -gt 1) { "$($file.Name): $($matched -join ', ')" }
+        }
+        $multiScenario | Should -BeNullOrEmpty -Because 'a file matching two scenario strings is excluded from both lanes'
     }
 
     It "Has a test file for every public command" {

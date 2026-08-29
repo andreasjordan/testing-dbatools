@@ -58,3 +58,12 @@ $config['AgCertificateInstances'] = @(
     "SQL03\SQL2025"
     "SQL04\SQL2025"
 )
+
+# The Azure SQL Database that the Azure code paths of Connect-DbaInstance need. Azure SQL Database is
+# the only engine that refuses to switch the database of a connection it has already opened, so it is
+# the only place that branch can be covered. Leave these empty in a configuration that has no Azure
+# SQL Database - the tests skip themselves then.
+# The password is the same throwaway one that setup_azure.ps1 uses for the whole lab.
+$config['AzureSqlDbServer'] = "sqllab1198641298.database.windows.net"
+$config['AzureSqlDbName'] = "sqllabdb"
+$config['AzureSqlDbCred'] = [PSCredential]::new('initialAdmin', (ConvertTo-SecureString -String 'initialP#ssw0rd' -AsPlainText -Force))

@@ -7,7 +7,9 @@
 
 [CmdletBinding()]
 param (
-    [string]$ConfigFilename = 'TestConfig_remote_instances.ps1',
+    # The default comes from the machine environment variable that the lab setup writes,
+    # so that a lab with another primary configuration only has to set it in one place.
+    [string]$ConfigFilename = $(if ($Env:MyConfigFilename) { $Env:MyConfigFilename } else { 'TestConfig_remote_instances.ps1' }),
     # Imports the installed module from the gallery instead of the local repository.
     [switch]$UseInstalledModule
 )

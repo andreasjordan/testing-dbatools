@@ -6,7 +6,9 @@ param(
     [switch]$SkipEnvironmentTest,
     [switch]$TestForWarnings,
     [string]$StatusUrl = $Env:MyStatusUrl,
-    [string]$ConfigFilename = 'TestConfig_remote_instances.ps1',
+    # The default comes from the machine environment variable that the lab setup writes,
+    # so that a lab with another primary configuration only has to set it in one place.
+    [string]$ConfigFilename = $(if ($Env:MyConfigFilename) { $Env:MyConfigFilename } else { 'TestConfig_remote_instances.ps1' }),
     # These have to be keys of $TestsRunGroups in dbatools\tests\pester.groups.ps1
     [ValidateSet('SINGLE', 'MULTI', 'COPY', 'HADR', 'RESTART', '2008R2SP2Express')]
     [string]$Scenario,

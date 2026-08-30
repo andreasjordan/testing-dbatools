@@ -10,7 +10,9 @@
 
 [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
 param (
-    [string]$ConfigFilename = 'TestConfig_remote_instances.ps1',
+    # The default comes from the machine environment variable that the lab setup writes,
+    # so that a lab with another primary configuration only has to set it in one place.
+    [string]$ConfigFilename = $(if ($Env:MyConfigFilename) { $Env:MyConfigFilename } else { 'TestConfig_remote_instances.ps1' }),
     # Keeps the files in the legacy temp folder C:\Temp, which may contain files that are not from a test run.
     [switch]$SkipLegacyTemp
 )

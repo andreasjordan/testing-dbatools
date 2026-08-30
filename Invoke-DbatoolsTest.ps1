@@ -12,7 +12,9 @@ param (
     # Name of the command to test. Wildcards are supported. Can be a list of commands.
     [Parameter(Mandatory, Position = 0)]
     [string[]]$Command,
-    [string]$ConfigFilename = 'TestConfig_remote_instances.ps1',
+    # The default comes from the machine environment variable that the lab setup writes,
+    # so that a lab with another primary configuration only has to set it in one place.
+    [string]$ConfigFilename = $(if ($Env:MyConfigFilename) { $Env:MyConfigFilename } else { 'TestConfig_remote_instances.ps1' }),
     # Runs only the unit tests or only the integration tests.
     [ValidateSet('UnitTests', 'IntegrationTests')]
     [string]$Tag,

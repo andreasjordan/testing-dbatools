@@ -28,6 +28,43 @@ $logPath    = "$testingBase\logs"
 
 $resultsFileName = "$logPath\results_$($Scenario)_$([datetime]::Now.ToString('yyyyMMdd_HHmmss')).txt"
 
+$start = Get-Date
+
+# Defined this early on purpose: the trap below is active for the whole script, so a run that dies
+# before the tests even start - a config that does not load, a module that does not import - has to
+# find this function already. Functions only exist once their definition has run.
+# The last line of the result file says how the run ended. Without it a short result file cannot be
+# told apart from a run that is still going. The trap below covers a run that dies with an error.
+$runEndWritten = $false
+function Write-RunEnd {
+    param([string]$Reason)
+    if ($script:runEndWritten) {
+        return
+    }
+    $script:runEndWritten = $true
+    $runEndInfo = [ordered]@{
+        Type            = "RunEnd"
+        EndTime         = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+        DurationMinutes = [int]((Get-Date) - $start).TotalMinutes
+        TestFileCount   = $(if ($null -eq $tests) { 0 } else { @($tests).Count })
+        CompletedCount  = [int]$progressCompleted
+        StoppedEarly    = ($null -eq $tests -or $progressCompleted -lt @($tests).Count)
+        StopReason      = $Reason
+    }
+    $runEndInfo | ConvertTo-Json -Compress | Add-Content -Path $resultsFileName
+}
+
+trap {
+    # Say what happened before anything else. The trap fires for the whole script, and if the call
+    # below failed its own error would replace the message of the error that got us here.
+    Write-Host "The run died with an error: $($_.Exception.Message)"
+    Write-Host $_.InvocationInfo.PositionMessage
+    if (Get-Command -Name Write-RunEnd -ErrorAction SilentlyContinue) {
+        Write-RunEnd -Reason "the run died with an error: $($_.Exception.Message)"
+    }
+    break
+}
+
 
 
 function Send-Status {
@@ -54,8 +91,6 @@ function Send-Status {
 
 
 
-
-$start = Get-Date
 
 Import-Module "$dbatoolsBase\dbatools.psm1" -Force
 
@@ -150,32 +185,6 @@ $runStartInfo = [ordered]@{
 $runStartInfo | ConvertTo-Json -Compress -Depth 6 | Add-Content -Path $resultsFileName
 
 Write-Host "Writing results to $resultsFileName"
-
-# The last line of the result file says how the run ended. Without it a short result file cannot be
-# told apart from a run that is still going. The trap below covers a run that dies with an error.
-$runEndWritten = $false
-function Write-RunEnd {
-    param([string]$Reason)
-    if ($script:runEndWritten) {
-        return
-    }
-    $script:runEndWritten = $true
-    $runEndInfo = [ordered]@{
-        Type            = "RunEnd"
-        EndTime         = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
-        DurationMinutes = [int]((Get-Date) - $start).TotalMinutes
-        TestFileCount   = @($tests).Count
-        CompletedCount  = $progressCompleted
-        StoppedEarly    = ($progressCompleted -lt @($tests).Count)
-        StopReason      = $Reason
-    }
-    $runEndInfo | ConvertTo-Json -Compress | Add-Content -Path $resultsFileName
-}
-
-trap {
-    Write-RunEnd -Reason "the run died with an error: $($_.Exception.Message)"
-    break
-}
 
 $progressParameter = @{ Id = Get-Random ; Activity = 'Running tests' }
 $progressTotal = $tests.Count

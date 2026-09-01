@@ -1,11 +1,16 @@
 [CmdletBinding()]
 param (
-    [string[]]$SqlInstances = @('FCI01', 'FCI02\SQL2022', 'SQL03\SQL2025', 'SQL03\SQL2022', 'SQL03\SQL2019', 'SQL04\SQL2025', 'SQL04\SQL2022', 'SQL04\SQL2019'),
-    [string[]]$HadrInstances = @('SQL03\SQL2025', 'SQL04\SQL2025'),
-    [string[]]$ServiceInstances = @('SQL03\SQL2022'),
+    # SQL05 carries the case sensitive instances (installed by 05_install_remote_instances.ps1 -SqlCollation),
+    # added here on 2026-08-31 when TestConfig_remote_setCS.ps1 started to use them for every role.
+    [string[]]$SqlInstances = @('FCI01', 'FCI02\SQL2022', 'SQL03\SQL2025', 'SQL03\SQL2022', 'SQL03\SQL2019', 'SQL04\SQL2025', 'SQL04\SQL2022', 'SQL04\SQL2019', 'SQL05\SQL2025', 'SQL05\SQL2022', 'SQL05\SQL2019'),
+    # The first one gets the AG certificate, every other one a copy of it. A single instance is fine.
+    [string[]]$HadrInstances = @('SQL03\SQL2025', 'SQL04\SQL2025', 'SQL05\SQL2025'),
+    # Instances whose service configuration the RESTART tests change need a static port, so that
+    # Set-DbaTcpPort.Tests.ps1 can put it back. TestConfig_remote_instances.ps1 lists the same ports.
+    [hashtable]$StaticPorts = @{ 'SQL03\SQL2022' = 14333; 'SQL05\SQL2022' = 14335 },
     # Hosts whose local account lockout threshold is verified after the policy has been applied.
     # The policy itself is linked to the OU, so every host in it gets the threshold either way.
-    [string[]]$LockoutComputers = @('SQL03', 'SQL04')
+    [string[]]$LockoutComputers = @('SQL03', 'SQL04', 'SQL05')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -28,12 +33,16 @@ if ($HadrInstances) {
     Write-PSFMessage -Level Host -Message 'Configuration for Availability Group tests'
     $null = Enable-DbaAgHadr -SqlInstance $HadrInstances -Force
     $null = New-DbaDbCertificate -SqlInstance $HadrInstances[0] -Name dbatoolsci_AGCert -Subject 'AG Certificate'
-    $null = Copy-DbaDbCertificate -Source $HadrInstances[0] -Destination $HadrInstances[1] -Certificate dbatoolsci_AGCert -SharedPath \\fs\Temp -Confirm:$false
+    foreach ($hadrReplica in ($HadrInstances | Select-Object -Skip 1)) {
+        $null = Copy-DbaDbCertificate -Source $HadrInstances[0] -Destination $hadrReplica -Certificate dbatoolsci_AGCert -SharedPath \\fs\Temp -Confirm:$false
+    }
 }
 
-if ($ServiceInstances) {
+if ($StaticPorts.Count -gt 0) {
     Write-PSFMessage -Level Host -Message 'Configuration for service configuration tests'
-    $null = Set-DbaNetworkConfiguration -SqlInstance $ServiceInstances -StaticPortForIPAll 14333 -RestartService -Confirm:$false
+    foreach ($staticPortInstance in $StaticPorts.Keys) {
+        $null = Set-DbaNetworkConfiguration -SqlInstance $staticPortInstance -StaticPortForIPAll $StaticPorts[$staticPortInstance] -RestartService -Confirm:$false
+    }
 }
 
 Write-PSFMessage -Level Host -Message "Configuration for login lockout tests"

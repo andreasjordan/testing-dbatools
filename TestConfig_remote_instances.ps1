@@ -49,14 +49,17 @@ $config['ClusterWitnessPath'] = "\\fs\ClusterWitness02"
 # These have to match what 06_configure_instances.ps1 sets up.
 $config['ExpectedTcpPort'] = @{
     "SQL03\SQL2022" = 14333
+    "SQL05\SQL2022" = 14335
 }
 $config['HadrInstances'] = @(
     "SQL03\SQL2025"
     "SQL04\SQL2025"
+    "SQL05\SQL2025"
 )
 $config['AgCertificateInstances'] = @(
     "SQL03\SQL2025"
     "SQL04\SQL2025"
+    "SQL05\SQL2025"
 )
 
 # The Azure SQL Database that the Azure code paths of Connect-DbaInstance need. Azure SQL Database is

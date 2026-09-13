@@ -109,6 +109,28 @@ foreach ($instance in $instances) {
         }
     }
 
+    # Every Agent job and schedule that is not part of the instance itself is a leftover. Tests that
+    # fail halfway leave theirs behind (the log shipping alert job, the "XE Session START/STOP" jobs
+    # of Start-DbaXESession when the Agent did not run them inside the ten-second window), and the
+    # next test that expects a clean Agent finds objects it did not create. The system objects are
+    # the ones the instance creates on its own: policy management, the data collector and its
+    # management data warehouse, and the SSIS catalog. Keep this list in step with
+    # TestEnvironment.Tests.ps1.
+    $systemAgentJobPattern = "^(syspolicy_|collection_set_|mdw_purge_data|SSIS )"
+    $systemAgentSchedulePattern = "^(syspolicy_|CollectorSchedule_|RunAsSQLAgentServiceStartSchedule$|SSISDB )"
+    $agentJobs = Get-DbaAgentJob -SqlInstance $server | Where-Object Name -notmatch $systemAgentJobPattern
+    foreach ($agentJob in $agentJobs) {
+        if ($PSCmdlet.ShouldProcess("$instance", "Remove agent job $($agentJob.Name)")) {
+            $null = Remove-DbaAgentJob -SqlInstance $server -Job $agentJob.Name -Confirm:$false
+        }
+    }
+    $agentSchedules = Get-DbaAgentSchedule -SqlInstance $server | Where-Object Name -notmatch $systemAgentSchedulePattern
+    foreach ($agentSchedule in $agentSchedules) {
+        if ($PSCmdlet.ShouldProcess("$instance", "Remove agent schedule $($agentSchedule.Name)")) {
+            $null = $agentSchedule | Remove-DbaAgentSchedule -Force -Confirm:$false
+        }
+    }
+
     # The default backup folder is a local path on the host of the instance,
     # so we have to go through the admin share to reach a remote instance.
     $backupPath = $server.BackupDirectory

@@ -129,6 +129,25 @@ WHERE d.name IN (N'master', N'model', N'msdb')
         $sqlLoginNames | Should -BeNullOrEmpty
     }
 
+    It "Has no non system agent jobs" {
+        # Every Agent job that is not part of the instance itself is a leftover: the log shipping
+        # alert job, the "XE Session START/STOP" jobs of Start-DbaXESession when the Agent did not
+        # run them inside the ten-second window, any dbatoolsci_* job whose test failed halfway.
+        # The system jobs are the ones the instance creates on its own: policy management, the
+        # data collector and its management data warehouse, and the SSIS catalog. Keep this list
+        # in step with Reset-TestEnvironment.ps1.
+        $agentJobNames = ($server.JobServer.Jobs | Where-Object Name -notmatch "^(syspolicy_|collection_set_|mdw_purge_data|SSIS )").Name
+        $agentJobNames | Should -BeNullOrEmpty
+    }
+
+    It "Has no non system agent schedules" {
+        # A job that deletes itself after it ran, or a test that removes only its job, leaves the
+        # schedule behind. The system schedules are the policy management, data collector, Agent
+        # service start and SSIS catalog ones.
+        $agentScheduleNames = ($server.JobServer.SharedSchedules | Where-Object Name -notmatch "^(syspolicy_|CollectorSchedule_|RunAsSQLAgentServiceStartSchedule$|SSISDB )").Name
+        $agentScheduleNames | Should -BeNullOrEmpty
+    }
+
     It "Has default trace enabled" {
         $server.Configuration.DefaultTraceEnabled.RunValue | Should -Be 1
     }

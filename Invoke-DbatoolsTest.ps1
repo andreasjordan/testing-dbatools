@@ -51,7 +51,9 @@ if (-not $tests) {
     throw "No test files found for: $($Command -join ', ')"
 }
 
-$resultsFileName = "$logPath\command_$([datetime]::Now.ToString('yyyyMMdd_HHmmss')).txt"
+# One stamp per run, shared by the result file and the warnings files, so parallel runs never collide.
+$runStamp = [datetime]::Now.ToString("yyyyMMdd_HHmmss")
+$resultsFileName = "$logPath\command_$runStamp.txt"
 $start = Get-Date
 
 $results = foreach ($test in $tests) {
@@ -70,7 +72,7 @@ $results = foreach ($test in $tests) {
     # Every warning a test file writes is a defect. The tests run without EnableException, so a
     # problem inside a command surfaces only as a warning, and Pester ignores those completely.
     # A test that expects a warning has to silence it with -WarningAction and assert on $WarnVar.
-    $warningsFile = "$logPath\$($test.Name).warnings.txt"
+    $warningsFile = "$logPath\$($test.Name).warnings_$runStamp.txt"
     $resultTest = Invoke-Pester -Configuration $pesterConfig 3> $warningsFile
     $warnings = @(Get-Content -Path $warningsFile | Where-Object { $PSItem })
     Remove-Item -Path $warningsFile -ErrorAction SilentlyContinue

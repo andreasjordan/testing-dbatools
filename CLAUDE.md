@@ -78,6 +78,8 @@ This is the loop for fixing a bug or building a feature in dbatools:
 
 By default it stops at the first failure. `logs\` is gitignored except for its README.
 
+Runs can be started in parallel, for example one per config file: every file a run writes carries the run's timestamp, including the per-test-file warnings capture `logs\<Test>.Tests.ps1.warnings_<timestamp>.txt`, which is kept only when that file wrote warnings. Two runs still share the lab, so start them against different instance sets.
+
 ### The result file format
 
 A result file is JSON lines with three kinds of line, told apart by their `Type`:

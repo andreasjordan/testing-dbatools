@@ -26,7 +26,11 @@ $testingBase = "$githubBase\testing-dbatools"
 $configFile = "$testingBase\$ConfigFilename"
 $logPath    = "$testingBase\logs"
 
-$resultsFileName = "$logPath\results_$($Scenario)_$([datetime]::Now.ToString('yyyyMMdd_HHmmss')).txt"
+# One stamp per run: the result file and every warnings file of this run carry it, so two runs started
+# side by side (say setC and setCS) never write to the same file, and a kept warnings file can be
+# attributed to its run afterwards.
+$runStamp = [datetime]::Now.ToString("yyyyMMdd_HHmmss")
+$resultsFileName = "$logPath\results_$($Scenario)_$runStamp.txt"
 
 $start = Get-Date
 
@@ -221,7 +225,7 @@ foreach ($test in $tests) {
     $startMemory = [int]([System.GC]::GetTotalMemory($false)/1MB)
     $startPrivateMB = [int]((Get-Process -Id $PID).PrivateMemorySize64/1MB)
 
-    $warningsFile = "$logPath\$($test.Name).warnings.txt"
+    $warningsFile = "$logPath\$($test.Name).warnings_$runStamp.txt"
     if ($TestForWarnings) {
         $resultTest = Invoke-Pester -Path $test.FullName -Output Detailed -PassThru 3> $warningsFile
         $warnings = Get-Content -Path $warningsFile

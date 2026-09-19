@@ -169,7 +169,12 @@ if ($CommandToStartWith) {
     # and IndexOf would search for a character instead of a filename.
     $commandIndex = @($tests.Name).IndexOf("$CommandToStartWith.Tests.ps1")
     if ($commandIndex -ge 0) {
-        $tests = $tests[$commandIndex..($tests.Count - 1)]
+        # A reversed run goes from Z to A, so resuming it means everything from the command down to A.
+        if ($ReverseOrder) {
+            $tests = $tests[0..$commandIndex]
+        } else {
+            $tests = $tests[$commandIndex..($tests.Count - 1)]
+        }
     } else {
         Write-Warning -Message "No test for [$CommandToStartWith] found"
         break

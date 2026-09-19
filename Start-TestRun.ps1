@@ -40,6 +40,8 @@ param (
     [string]$CommandToStartWith,
     # Keeps every run in alphabetical order instead of reversing every second one.
     [switch]$KeepOrder,
+    # Reverses every run. Needed to resume a reversed run on its own, together with -CommandToStartWith.
+    [switch]$ReverseOrder,
     # Seconds between two starts. The run stamp has a resolution of one second and names the result file.
     [int]$StartGapSeconds = 5
 )
@@ -95,7 +97,7 @@ $runs = for ($index = 0; $index -lt $ConfigFilename.Count; $index++) {
         SetName         = $ConfigFilename[$index] -replace '^TestConfig_(remote_)?(.+)\.ps1$', '$2'
         Edition         = $runEdition
         ExcludeScenario = $runExcludeScenario
-        ReverseOrder    = (-not $KeepOrder) -and ($index % 2 -eq 1)
+        ReverseOrder    = $ReverseOrder -or ((-not $KeepOrder) -and ($index % 2 -eq 1))
         Instances       = $instances
         Hosts           = $hosts
         HadrInCluster   = $runsHadr -and ($hadrHost -in $config['ClusterWitnessNodes'])

@@ -1,4 +1,4 @@
-# Alternative set of test instances: "everything case sensitive".
+# Instance set "setCS": everything on SQL05, "everything case sensitive".
 #
 #     .\run_tests.ps1 -ConfigFilename TestConfig_remote_setCS.ps1
 #
@@ -28,9 +28,13 @@
 #     $null = New-DbaDbCertificate -SqlInstance "SQL05\SQL2025" -Name dbatoolsci_AGCert -Subject "AG Certificate"
 #     $null = Set-DbaNetworkConfiguration -SqlInstance "SQL05\SQL2022" -StaticPortForIPAll 14335 -RestartService -Confirm:$false
 #
-# The SQL Server source paths, the temp folder, the appveyor lab repository, the cluster and Azure
-# settings and the lab expectations come from the main configuration, which is dot-sourced first.
-# The expectations there already contain the SQL05 entries, so nothing is overridden below.
+# SQL05 is not a node of any cluster, so its availability groups are clusterless and this set runs beside
+# every other set without restrictions - see the rules in TestConfig_remote_instances.ps1. SQL05 also has
+# the instance SQL05\TEST (2022, case insensitive), which belongs to no set and is stopped since 2026-09-19.
+#
+# The SQL Server source paths, the appveyor lab repository, the cluster and Azure settings and the lab
+# expectations come from the main configuration, which is dot-sourced first. Only the roles and the temp
+# folder differ.
 
 . "$PSScriptRoot\TestConfig_remote_instances.ps1"
 
@@ -41,3 +45,5 @@ $config["InstanceCopy1"] = "SQL05\SQL2022"   # Source of every copy, so never an
 $config["InstanceCopy2"] = "SQL05\SQL2025"   # Destination, so its version has to be at least the one of InstanceCopy1.
 $config["InstanceHadr"] = "SQL05\SQL2025"    # Needs Hadr enabled and the AG certificate, see above.
 $config["InstanceRestart"] = "SQL05\SQL2022" # Stays standalone and keeps the static port 14335.
+
+$config["Temp"] = "\\fs\Temp\setCS"

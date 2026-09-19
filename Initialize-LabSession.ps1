@@ -35,6 +35,12 @@ if ($UseInstalledModule) {
 
 $TestConfig = Get-TestConfig -LocalConfigPath $configFile
 
+# Every set has its own temp folder below the shared one, see TestConfig_remote_instances.ps1. Create it on
+# demand, so that a fresh lab or a new set does not fail its first environment test on a missing folder.
+if ($TestConfig.Temp -and -not (Test-Path -Path $TestConfig.Temp)) {
+    $null = New-Item -ItemType Directory -Path $TestConfig.Temp
+}
+
 # The same defaults that the tests use, so that commands typed by hand behave like commands inside a test.
 $PSDefaultParameterValues = $TestConfig.Defaults.Clone()
 $PSDefaultParameterValues['*-Dba*:EnableException'] = $true

@@ -67,6 +67,12 @@ This is the loop for fixing a bug or building a feature in dbatools:
 
 # Count connections the tests did not close (one query per instance and test file)
 .\run_tests.ps1 -CheckSleepingConnections
+
+# Everything except one scenario group, and the files from Z to A (both exist for running beside another set)
+.\run_tests.ps1 -ConfigFilename TestConfig_remote_set04.ps1 -ExcludeScenario HADR -ReverseOrder
+
+# Two sets side by side, each in its own process; the pairing rules are checked before anything starts
+.\Start-TestRun.ps1 -ConfigFilename TestConfig_remote_set03.ps1, TestConfig_remote_setCS.ps1 -Edition Desktop, Core -ContinueOnFailure -TestForWarnings
 ```
 
 `run_tests.ps1` is the entry point for everything test-related. Per test file it:
@@ -78,7 +84,15 @@ This is the loop for fixing a bug or building a feature in dbatools:
 
 By default it stops at the first failure. `logs\` is gitignored except for its README.
 
-Runs can be started in parallel, for example one per config file: every file a run writes carries the run's timestamp, including the per-test-file warnings capture `logs\<Test>.Tests.ps1.warnings_<timestamp>.txt`, which is kept only when that file wrote warnings. Two runs still share the lab, so start them against different instance sets.
+### Running two sets side by side
+
+Every file a run writes carries the run's timestamp, including the per-test-file warnings capture `logs\<Test>.Tests.ps1.warnings_<timestamp>.txt` (kept only when that file wrote warnings), and every set has its own temp folder below `\\fs\Temp`. So two runs can share the lab as long as they share nothing else. The rules, with the reasons, are in the header of `TestConfig_remote_instances.ps1`; `Start-TestRun.ps1` checks them before it starts anything:
+
+1. **Disjoint hosts, not only disjoint instances** - 41 test files act on the host of an instance through `-ComputerName`.
+2. **At most one Hadr instance inside CLUSTER02** (SQL03 and SQL04) - the Hadr tests create availability groups with fixed names, and an availability group is a cluster group. The other set runs with `-ExcludeScenario HADR` and its `-Scenario HADR` afterwards.
+3. **Two runs, not three** - ADMIN01 has 12 GB and a full run peaks at about 3.5 GB.
+
+Two runs started together stay in lockstep for the whole day, so they process the same test file at the same moment. `Start-TestRun.ps1` therefore gives every second run `-ReverseOrder`, and the per-set temp folders keep the fixed fixture names apart. Start it from a PowerShell console: a runner started from Git Bash inherits a PATH whose `whoami` answers `Admin` instead of `ORDIX\Admin` and two tests fail on that alone; a Windows PowerShell runner started from pwsh needs the module path of Windows PowerShell, which the launcher sets.
 
 ### The result file format
 
@@ -126,7 +140,7 @@ If the path does not exist, `Get-TestConfig` silently falls back to AppVeyor/Cod
 
 Two config generations coexist:
 
-- `TestConfig_remote_instances.ps1` — current naming: `InstanceSingle`, `InstanceMulti1/2`, `InstanceCopy1/2`, `InstanceHadr`, `InstanceRestart`. These are the same keys the CI matrix in `dbatools\.github\workflows\ci-azure.yml` sets per lane, and they map onto the scenario groups in `dbatools\tests\pester.groups.ps1`, which `run_tests.ps1 -Scenario` uses via `Get-TestsForScenario`. Several entries deliberately point at the same instance.
+- `TestConfig_remote_instances.ps1` — current naming: `InstanceSingle`, `InstanceMulti1/2`, `InstanceCopy1/2`, `InstanceHadr`, `InstanceRestart`. These are the same keys the CI matrix in `dbatools\.github\workflows\ci-azure.yml` sets per lane, and they map onto the scenario groups in `dbatools\tests\pester.groups.ps1`, which `run_tests.ps1 -Scenario` uses via `Get-TestsForScenario`. Several entries deliberately point at the same instance. This file holds the lab description (shares, clusters, Azure, expectations) plus the default set of roles, which is `set03`. The other sets - `TestConfig_remote_set04.ps1`, `TestConfig_remote_setCS.ps1`, `TestConfig_remote_setFCI.ps1` and the alias `TestConfig_remote_set03.ps1` - dot-source it and override only the roles and `Temp`. Each set lives on one host (SQL03, SQL04, SQL05, or CLUSTER01 plus SQL03), so that two of them can run side by side; the header of the base file lists them and the rules.
 - `TestConfig_local_instances.ps1` — older naming: `instance1/2/3` on one host, plus `SqlCred`, `instance2_detailed`, and commented-out Azure/SSIS entries. The local install/uninstall scripts use this generation.
 
 Both detect the SQL Server source media location by probing paths (`C:\SQLServerFull` on an Azure image, or shares on `\\dc`), and both carry the expectations that `TestEnvironment.Tests.ps1` asserts against: `ExpectedTcpPort`, `HadrInstances` and `AgCertificateInstances`. Those must be kept in step with what `06_configure_instances.ps1` (remote) or `install_local_instances.ps1` (local) actually configures.

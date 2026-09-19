@@ -4,10 +4,11 @@ param (
     # added here on 2026-08-31 when TestConfig_remote_setCS.ps1 started to use them for every role.
     [string[]]$SqlInstances = @('FCI01', 'FCI02\SQL2022', 'SQL03\SQL2025', 'SQL03\SQL2022', 'SQL03\SQL2019', 'SQL04\SQL2025', 'SQL04\SQL2022', 'SQL04\SQL2019', 'SQL05\SQL2025', 'SQL05\SQL2022', 'SQL05\SQL2019'),
     # The first one gets the AG certificate, every other one a copy of it. A single instance is fine.
-    [string[]]$HadrInstances = @('SQL03\SQL2025', 'SQL04\SQL2025', 'SQL05\SQL2025'),
+    # SQL04\SQL2022 is the Hadr instance of TestConfig_remote_set04.ps1 since 2026-09-19.
+    [string[]]$HadrInstances = @('SQL03\SQL2025', 'SQL04\SQL2025', 'SQL04\SQL2022', 'SQL05\SQL2025'),
     # Instances whose service configuration the RESTART tests change need a static port, so that
     # Set-DbaTcpPort.Tests.ps1 can put it back. TestConfig_remote_instances.ps1 lists the same ports.
-    [hashtable]$StaticPorts = @{ 'SQL03\SQL2022' = 14333; 'SQL05\SQL2022' = 14335 },
+    [hashtable]$StaticPorts = @{ 'SQL03\SQL2022' = 14333; 'SQL04\SQL2019' = 14334; 'SQL05\SQL2022' = 14335 },
     # Hosts whose local account lockout threshold is verified after the policy has been applied.
     # The policy itself is linked to the OU, so every host in it gets the threshold either way.
     [string[]]$LockoutComputers = @('SQL03', 'SQL04', 'SQL05')

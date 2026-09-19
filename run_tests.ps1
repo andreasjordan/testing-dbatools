@@ -12,6 +12,14 @@ param(
     # These have to be keys of $TestsRunGroups in dbatools\tests\pester.groups.ps1
     [ValidateSet('SINGLE', 'MULTI', 'COPY', 'HADR', 'RESTART', '2008R2SP2Express')]
     [string]$Scenario,
+    # Runs everything except this scenario group. Lets a second set run beside one whose Hadr instance is in the
+    # same cluster: the rest of the suite in parallel, the HADR group alone afterwards.
+    [ValidateSet('SINGLE', 'MULTI', 'COPY', 'HADR', 'RESTART', '2008R2SP2Express')]
+    [string]$ExcludeScenario,
+    # Processes the test files from Z to A. Two runs started together stay in lockstep for the whole day, so they
+    # hit the shared surfaces (ADMIN01, the Azure SQL Database) in the same file at the same moment; started in
+    # opposite directions they cross once.
+    [switch]$ReverseOrder,
     [hashtable]$Config,
     [switch]$CheckSleepingConnections
 )
@@ -30,7 +38,9 @@ $logPath    = "$testingBase\logs"
 # side by side (say setC and setCS) never write to the same file, and a kept warnings file can be
 # attributed to its run afterwards.
 $runStamp = [datetime]::Now.ToString("yyyyMMdd_HHmmss")
-$resultsFileName = "$logPath\results_$($Scenario)_$runStamp.txt"
+# The scenario part of the file name says what was filtered: "HADR", "notHADR" or nothing.
+$scenarioTag = "$Scenario$(if ($ExcludeScenario) { "not$ExcludeScenario" })"
+$resultsFileName = "$logPath\results_$($scenarioTag)_$runStamp.txt"
 
 $start = Get-Date
 
@@ -107,6 +117,12 @@ if ($Config) {
     }
 }
 
+# Every set has its own temp folder below the shared one, see TestConfig_remote_instances.ps1. Create it on
+# demand, so that a fresh lab or a new set does not fail its first environment test on a missing folder.
+if ($TestConfig.Temp -and -not (Test-Path -Path $TestConfig.Temp)) {
+    $null = New-Item -ItemType Directory -Path $TestConfig.Temp
+}
+
 $tests = Get-ChildItem -Path "$dbatoolsBase\tests\*.Tests.ps1" | Sort-Object -Property Name
 
 # Filter tests based on script parameters
@@ -115,6 +131,15 @@ if ($Scenario) {
     . "$dbatoolsBase\tests\appveyor.common.ps1"
     . "$dbatoolsBase\tests\pester.groups.ps1"
     $tests = Get-TestsForScenario -Scenario $Scenario -AllTest $tests
+}
+
+if ($ExcludeScenario) {
+    if (-not $Scenario) {
+        . "$dbatoolsBase\tests\appveyor.common.ps1"
+        . "$dbatoolsBase\tests\pester.groups.ps1"
+    }
+    $excludedTests = Get-TestsForScenario -Scenario $ExcludeScenario -AllTest $tests
+    $tests = $tests | Where-Object { $_.Name -notin $excludedTests.Name }
 }
 
 if ($CommandToStartWith) {
@@ -130,6 +155,11 @@ if ($CommandToStartWith) {
 }
 
 $tests = $tests | Select-Object -First $NumberOfTestsToTest -Skip $NumberOfTestsToSkip
+
+if ($ReverseOrder) {
+    $tests = @($tests)
+    [array]::Reverse($tests)
+}
 
 #$ProgressPreference = 'SilentlyContinue'
 #Get-Date
@@ -173,6 +203,7 @@ $runStartInfo = [ordered]@{
     PesterVersion   = (Get-Module -Name Pester).Version.ToString()
     ConfigFilename  = $ConfigFilename
     Scenario        = $Scenario
+    ExcludeScenario = $ExcludeScenario
     TestFileCount   = @($tests).Count
     Instances       = $configuredInstances
     Parameters      = [ordered]@{
@@ -182,6 +213,7 @@ $runStartInfo = [ordered]@{
         ContinueOnFailure        = [bool]$ContinueOnFailure
         SkipEnvironmentTest      = [bool]$SkipEnvironmentTest
         TestForWarnings          = [bool]$TestForWarnings
+        ReverseOrder             = [bool]$ReverseOrder
         CheckSleepingConnections = [bool]$CheckSleepingConnections
         Config                   = $Config
     }

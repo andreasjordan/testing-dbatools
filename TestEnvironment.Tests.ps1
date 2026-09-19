@@ -85,6 +85,15 @@ Describe "the instance <_>" -ForEach $instance {
         }
     }
 
+    AfterAll {
+        # Invoke-DbaQuery -SqlInstance $server -Database master below makes Connect-DbaInstance clone the server
+        # object for the database switch, and that clone keeps its connection checked out of the pool for good.
+        # Measured 2026-09-19: one connection per instance per run of this file, a forced GC does not reclaim it,
+        # ClearAllPools does not close it, so a full run exhausted the 100-connection pool of the Single instance
+        # after about 100 test files. Disconnecting the server object returns the connection.
+        $null = $server | Disconnect-DbaInstance
+    }
+
     It "Has no files in default backup folder" {
         Get-ChildItem -Path $backupPath | Should -HaveCount 0
     }

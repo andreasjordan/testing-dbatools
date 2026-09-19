@@ -320,6 +320,19 @@ foreach ($test in $tests) {
         }
     }
 
+    # On pwsh the connection pool of this process does not recover once the server has killed its pooled
+    # sessions (a test that drops a database kills the sessions parked in it): every later connect to that
+    # instance fails after 60 s with "obtaining a connection from the pool ... max pool size was reached",
+    # for the rest of the run (2026-08-31, twice on 2026-09-19). Clearing the pools gives the next file a
+    # fresh pool. The file that hit it stays failed, so the result file still shows where it happened.
+    $poolMessages = @($resultTest.Failed, $resultTest.FailedBlocks, $resultEnvironment.Failed, $resultEnvironment.FailedBlocks) |
+        ForEach-Object { $_.ErrorRecord.Exception.Message } |
+        Where-Object { $_ -match "obtaining a connection from the pool" }
+    if ($poolMessages) {
+        Write-Warning -Message "Connection pool timeout seen in $($test.Name), clearing the connection pools of this process"
+        Clear-DbaConnectionPool
+    }
+
     if (Get-Module -Name dbatools | Where-Object { $_.Version.Major -gt 0 }) {
         Write-Warning -Message "dbatools was loaded"
         $failure = $true

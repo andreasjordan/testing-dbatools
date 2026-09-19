@@ -50,6 +50,28 @@ $start = Get-Date
 # The last line of the result file says how the run ended. Without it a short result file cannot be
 # told apart from a run that is still going. The trap below covers a run that dies with an error.
 $runEndWritten = $false
+
+# Every line of the result file is appended with the file opened for a moment. Anything else that has the file
+# open without sharing writes at that very moment - an antivirus scan, a reader looking at the running run -
+# makes Add-Content fail with "being used by another process". On 2026-09-19 a single such miss killed a full
+# run after 63 files, so retry a few times before giving up on the run.
+function Add-ResultLine {
+    param([string]$Line)
+    $attempt = 0
+    while ($true) {
+        try {
+            Add-Content -Path $resultsFileName -Value $Line -ErrorAction Stop
+            return
+        } catch [System.IO.IOException] {
+            $attempt++
+            if ($attempt -ge 10) {
+                throw
+            }
+            Start-Sleep -Milliseconds 500
+        }
+    }
+}
+
 function Write-RunEnd {
     param([string]$Reason)
     if ($script:runEndWritten) {
@@ -65,7 +87,7 @@ function Write-RunEnd {
         StoppedEarly    = ($null -eq $tests -or $progressCompleted -lt @($tests).Count)
         StopReason      = $Reason
     }
-    $runEndInfo | ConvertTo-Json -Compress | Add-Content -Path $resultsFileName
+    Add-ResultLine -Line ($runEndInfo | ConvertTo-Json -Compress)
 }
 
 trap {
@@ -218,7 +240,7 @@ $runStartInfo = [ordered]@{
         Config                   = $Config
     }
 }
-$runStartInfo | ConvertTo-Json -Compress -Depth 6 | Add-Content -Path $resultsFileName
+Add-ResultLine -Line ($runStartInfo | ConvertTo-Json -Compress -Depth 6)
 
 Write-Host "Writing results to $resultsFileName"
 
@@ -322,7 +344,7 @@ foreach ($test in $tests) {
     $resultInfo = Get-TestFileResult @splatTestFileResult
     # Depth matters here: the default of 2 truncates every failure to "@{TargetObject=; Exception=}",
     # which turns a finished run into a log that says what failed but not why.
-    $resultInfo | ConvertTo-Json -Compress -Depth 6 | Add-Content -Path $resultsFileName
+    Add-ResultLine -Line ($resultInfo | ConvertTo-Json -Compress -Depth 6)
 
 #    $null = Get-DbaConnectedInstance | Disconnect-DbaInstance
 #    Clear-DbaConnectionPool

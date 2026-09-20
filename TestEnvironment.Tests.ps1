@@ -157,6 +157,16 @@ WHERE d.name IN (N'master', N'model', N'msdb')
         $agentScheduleNames | Should -BeNullOrEmpty
     }
 
+    It "Has no dbatoolsci registered servers or groups" {
+        # The Central Management Server store is not covered by any other check. On 2026-09-20 a Move-DbaRegServer
+        # cleanup died on a connection pool timeout and left its groups and servers behind; the next file then
+        # failed on a duplicate server name, and nothing here noticed.
+        $registeredServerNames = (Get-DbaRegServer -SqlInstance $server | Where-Object Name -like "dbatoolsci*").Name
+        $registeredServerNames | Should -BeNullOrEmpty
+        $registeredGroupNames = (Get-DbaRegServerGroup -SqlInstance $server | Where-Object Name -like "dbatoolsci*").Name
+        $registeredGroupNames | Should -BeNullOrEmpty
+    }
+
     It "Has default trace enabled" {
         $server.Configuration.DefaultTraceEnabled.RunValue | Should -Be 1
     }

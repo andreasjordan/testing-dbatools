@@ -79,7 +79,6 @@ $config['HadrInstances'] = @(
 )
 $config['AgCertificateInstances'] = @(
     "SQL03\SQL2025"
-    "SQL04\SQL2025"
     "SQL04\SQL2022"
     "SQL05\SQL2025"
 )

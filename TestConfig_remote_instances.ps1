@@ -92,6 +92,12 @@ $config['AzureSqlDbServer'] = "sqllab1198641298.database.windows.net"
 $config['AzureSqlDbName'] = "sqllabdb"
 $config['AzureSqlDbCred'] = [PSCredential]::new('initialAdmin', (ConvertTo-SecureString -String 'initialP#ssw0rd' -AsPlainText -Force))
 
+# The lab CA for the certificate request tests of New-DbaComputerCertificate. WebServerPendingApproval is a copy of
+# WebServer (schema version 2) that holds every request as pending until a CA manager approves it; created 2026-09-30.
+$config["CaServer"] = "DC.ordix.local"
+$config["CaName"] = "LabRootCA1"
+$config["ApprovalTemplate"] = "WebServerPendingApproval"
+
 
 # The default set: "set03", everything on SQL03.
 #

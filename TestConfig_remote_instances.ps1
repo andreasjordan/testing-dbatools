@@ -36,10 +36,7 @@
 $config['InstanceConfiguration'] = [ordered]@{
     Version          = 2025
 }
-if (Test-Path -Path 'C:\SQLServerFull') {
-    # We are on an Azure virtual maschine with preinstalled SQL Server
-    $config['InstanceConfiguration'].SourcePath = 'C:\SQLServerFull'
-} elseif (Test-Path -Path '\\dc\Software\SQLServer\ISO\SQLServer2025') {
+if (Test-Path -Path '\\dc\Software\SQLServer\ISO\SQLServer2025') {
     # We are on personal setup of Andreas Jordan
     $config['InstanceConfiguration'].SourcePath = '\\dc\Software\SQLServer\ISO\SQLServer2025'
     $config['InstanceConfiguration'].UpdateSourcePath = '\\dc\Software\SQLServer\CU'
@@ -84,7 +81,7 @@ $config['AgCertificateInstances'] = @(
 # the only engine that refuses to switch the database of a connection it has already opened, so it is
 # the only place that branch can be covered. Leave these empty in a configuration that has no Azure
 # SQL Database - the tests skip themselves then.
-# The password is the same throwaway one that setup_azure.ps1 uses for the whole lab.
+# The password is the throwaway initial password that MyAzureLab\init_HyperVLab.ps1 gives the server.
 $config['AzureSqlDbServer'] = "sqllab1198641298.database.windows.net"
 $config['AzureSqlDbName'] = "sqllabdb"
 $config['AzureSqlDbCred'] = [PSCredential]::new('initialAdmin', (ConvertTo-SecureString -String 'initialP#ssw0rd' -AsPlainText -Force))

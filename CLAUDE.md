@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A collection of standalone PowerShell scripts (no module, no build step, no CI) that:
 
-1. **Build lab environments** — Azure VMs, Windows failover clusters, SQL Server FCIs, and standalone instances.
+1. **Build the lab** — Windows failover clusters, SQL Server FCIs, and standalone instances in a Windows domain.
 2. **Run the Pester test suite of the [dbatools](https://github.com/dataplat/dbatools) module** against those labs, one test file at a time, and analyse the results.
 
 This is an *addition* to the dbatools CI, not a replacement. That CI moved off AppVeyor onto self-hosted Azure VMSS runners in July 2026, but the AppVeyor matrix and its `tests\appveyor.*.ps1` scripts were ported rather than rewritten — so the scenario names below still line up with the CI lanes. `README.md` tracks which dbatools tests are currently excluded and the longer-term goals.
@@ -135,19 +135,13 @@ If the path does not exist, `Get-TestConfig` silently falls back to AppVeyor/Cod
 
 `TestConfig_remote_instances.ps1` uses the instance names `InstanceSingle`, `InstanceMulti1/2`, `InstanceCopy1/2`, `InstanceHadr`, `InstanceRestart`. These are the same keys the CI matrix in `dbatools\.github\workflows\ci-azure.yml` sets per lane, and they map onto the scenario groups in `dbatools\tests\pester.groups.ps1`, which `run_tests.ps1 -Scenario` uses via `Get-TestsForScenario`. Several entries deliberately point at the same instance. This file holds the lab description (shares, clusters, Azure, expectations) plus the default set of roles, which is `set03`. The other sets - `TestConfig_remote_set04.ps1`, `TestConfig_remote_setFCI.ps1` and the alias `TestConfig_remote_set03.ps1` - dot-source it and override only the roles and `Temp`. Each set lives on one host (SQL03, SQL04, or CLUSTER01 plus SQL03), so that two of them can run side by side; the header of the base file lists them and the rules.
 
-It detects the SQL Server source media location by probing paths (`C:\SQLServerFull` on an Azure image, or shares on `\\dc`), and carries the expectations that `TestEnvironment.Tests.ps1` asserts against: `ExpectedTcpPort`, `HadrInstances` and `AgCertificateInstances`. Those must be kept in step with what `06_configure_instances.ps1` actually configures.
+It detects the SQL Server source media location by probing the shares on `\\dc`, and carries the expectations that `TestEnvironment.Tests.ps1` asserts against: `ExpectedTcpPort`, `HadrInstances` and `AgCertificateInstances`. Those must be kept in step with what `06_configure_instances.ps1` actually configures.
 
 Anything that discovers instances — the environment test, `Reset-TestEnvironment.ps1`, `Initialize-LabSession.ps1` — derives them from the `Instance*` properties of the loaded config rather than hard-coding names.
 
 ## Lab building scripts
 
-Two independent lab flavours; pick one, they are not meant to be combined.
-
-**Single-machine / Azure lab (older, config-driven):**
-
-- `setup_azure.ps1` — creates the resource group, key vault + self-signed cert, vnet/NSG (RDP + WinRM opened to the caller's current public IP only), a SQL Server VM image, installs modules and chocolatey packages over WinRM, clones the three GitHub repos, then opens RDP. Rerunnable with `-Continue`. The scripts that installed and configured instances on that machine (`install_local_instances.ps1`, `uninstall_local_instances.ps1`) and their configuration with the old `instance1/2/3` names (`TestConfig_local_instances.ps1`) were removed on 2026-11-24 and are in the git history.
-
-**Multi-machine domain lab (current, numbered scripts run in order):**
+The lab is a Windows domain on the Hyper-V host BASE in Azure. `MyAzureLab\HyperVLab\install_TestingDbatools.ps1` builds the machines and then runs these scripts in order on ADMIN01:
 
 | Script | Purpose |
 | --- | --- |
@@ -161,6 +155,8 @@ Two independent lab flavours; pick one, they are not meant to be combined.
 | `c2_remove.ps1`, `c3_remove.ps1` | Remove FCI nodes (`ACTION = RemoveNode`) to tear a cluster instance back down |
 
 Scripts 02–07 take everything as parameters with defaults; 01 uses an inline `$config` hashtable instead. They log progress with `Write-PSFMessage -Level Host` and `throw` on failure. Domain names, IPs, the `ORDIX\Admin` credential and the `ORDIX\gMSA-SQLServer$` service account are hard-coded — adapt them for another environment.
+
+Until 2026-11-24 there was also a single-machine lab: `setup_azure.ps1` built one Azure VM with SQL Server 2022 preinstalled, and `install_local_instances.ps1` added and configured two more instances on it. The idea was that someone who reports a bug can build the same lab to reproduce it as the one used to fix it. Its configuration still used the instance names `instance1/2/3`, which no dbatools test reads any more, so it was removed; `git log -- setup_azure.ps1` finds it for a rebuild.
 
 ## Test-shape enforcement scripts
 

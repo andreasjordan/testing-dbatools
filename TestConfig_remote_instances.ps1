@@ -19,7 +19,7 @@
 #      availability groups with fixed names, an availability group is a cluster group, and two runs collide inside
 #      the cluster. set03 or setFCI beside set04 works only when one of them runs with -ExcludeScenario HADR and its
 #      Hadr lane runs afterwards (23 files, 15 minutes).
-#   3. ADMIN01 has 12 GB and a full run peaks at about 3.5 GB, so two runs fit and three do not.
+#   3. ADMIN01 has 9 GB and a full run peaks at about 3.5 GB, so two runs fit and three do not.
 # The whole lab takes set03 beside set04 with -ExcludeScenario HADR, then set04 -Scenario HADR, then setFCI.
 #
 # RULES EVERY SET OBEYS:

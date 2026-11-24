@@ -87,7 +87,7 @@ Every file a run writes carries the run's timestamp, including the per-test-file
 
 1. **Disjoint hosts, not only disjoint instances** - 41 test files act on the host of an instance through `-ComputerName`.
 2. **At most one Hadr instance inside CLUSTER02** (SQL03 and SQL04) - the Hadr tests create availability groups with fixed names, and an availability group is a cluster group. The other set runs with `-ExcludeScenario HADR` and its `-Scenario HADR` afterwards.
-3. **Two runs, not three** - ADMIN01 has 12 GB and a full run peaks at about 3.5 GB.
+3. **Two runs, not three** - ADMIN01 has 9 GB and a full run peaks at about 3.5 GB.
 
 Two runs started together stay in lockstep for the whole day, so they process the same test file at the same moment. `Start-TestRun.ps1` therefore gives every second run `-ReverseOrder`, and the per-set temp folders keep the fixed fixture names apart. Start it from a PowerShell console: a runner started from Git Bash inherits a PATH whose `whoami` answers `Admin` instead of `ORDIX\Admin` and two tests fail on that alone; a Windows PowerShell runner started from pwsh needs the module path of Windows PowerShell, which the launcher sets.
 

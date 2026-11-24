@@ -1,9 +1,10 @@
 # Bootstrapping ADMIN01 after a lab rebuild
 
-The lab setup (`MyAzureLab\HyperVLab\TestingDbatools.ps1`) builds ADMIN01 up to and including the
-tooling it can install without a personal identity: chocolatey packages (git, gh, jq, dotnet-sdk,
-VS Code, SSMS, ...), the PowerShell modules, the git identity and the public repo clones under
-`C:\GitHub`. Everything below needs interactive authentication and is done once, by hand, in this
+The lab setup (`MyAzureLab\HyperVLab\install_TestingDbatools.ps1`) builds ADMIN01 up to and including
+the tooling it can install without a personal identity: chocolatey packages (git, gh, jq, dotnet-sdk,
+VS Code, SSMS, ...), the PowerShell modules, the git identity, the public repo clones under
+`C:\GitHub` and dbatools.library at the version that the dbatools repo pins, for both PowerShell
+editions. Everything below needs interactive authentication and is done once, by hand, in this
 order.
 
 Keep the repo paths exactly as the setup created them (`C:\GitHub\dbatools`,
@@ -42,18 +43,7 @@ relying on the gates:
 bash C:\GitHub\dbatools\.claude\hooks\hooks-doctor.sh
 ```
 
-## 4. dbatools.library at the repo pin
-
-The gallery install of dbatools brings some version of the library; the repo pins an exact one.
-Install the pinned version for both PowerShell editions - the editions must not share one install
-folder:
-
-```powershell
-pwsh -NoProfile -File C:\GitHub\dbatools\.github\scripts\install-dbatools-library.ps1
-powershell -NoProfile -File C:\GitHub\dbatools\.github\scripts\install-dbatools-library.ps1
-```
-
-## 5. Verify
+## 4. Verify
 
 ```powershell
 cd C:\GitHub\testing-dbatools

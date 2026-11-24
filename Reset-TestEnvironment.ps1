@@ -24,7 +24,7 @@ $testingBase = 'C:\GitHub\testing-dbatools'
 . "$testingBase\Initialize-LabSession.ps1" -ConfigFilename $ConfigFilename
 
 $instances = $TestConfig.PSObject.Properties |
-    Where-Object { $_.Name -match '^Instance' -and $_.Name -notin 'InstanceConfiguration', 'instance2_detailed' -and $_.Value -is [string] -and $_.Value } |
+    Where-Object { $_.Name -match '^Instance' -and $_.Name -ne 'InstanceConfiguration' -and $_.Value -is [string] -and $_.Value } |
     ForEach-Object { $_.Value } |
     Sort-Object -Unique
 

@@ -56,9 +56,6 @@ This is the loop for fixing a bug or building a feature in dbatools:
 # One scenario group (keys of $TestsRunGroups in dbatools\tests\pester.groups.ps1)
 .\run_tests.ps1 -Scenario SINGLE
 
-# Against the local-instance lab instead
-.\run_tests.ps1 -ConfigFilename TestConfig_local_instances.ps1
-
 # Keep going after a failing test, and treat any Pester warning as a failure
 .\run_tests.ps1 -ContinueOnFailure -TestForWarnings
 
@@ -127,10 +124,8 @@ Serialize these lines with `-Depth 6`. The `ConvertTo-Json` default of 2 truncat
 ### Analysing results
 
 - `analyse_test_results.ps1` — loads the newest `logs\results_*.txt`, prints the run header and footer, groups passed/failed, and shows every failure with its source, line and message, plus lab leftovers, a module left loaded and warnings. Result files written before the header existed still work, because a line without a `Type` is treated as a test file. Has a deliberate `break` partway through; the lines after it are meant to be run interactively (`Out-GridView` pickers). Note that the `break` also ends the script that called it.
-- `analyse_local_tests.ps1` — same idea, but loads all result files and sets up `$TestConfig` first.
-- `analyse_tests.ps1` — static analysis over the dbatools test files: which `$TestConfig.Instance*` each test uses, grouped summary to the clipboard, `-PassThru` for objects. Useful for deciding which instances a change can affect.
 
-The two `analyse_*_tests.ps1` scripts are working scratch scripts meant to be stepped through in an editor, not run unattended.
+It is a working scratch script meant to be stepped through in an editor, not run unattended. Which `$TestConfig.Instance*` a dbatools test file uses, and so which instances a change can affect, `Get-TestInstanceUsage` reports (a private dbatools command, available after importing `dbatools.psm1`).
 
 ## Configuration model
 
@@ -138,14 +133,11 @@ The two `analyse_*_tests.ps1` scripts are working scratch scripts meant to be st
 
 If the path does not exist, `Get-TestConfig` silently falls back to AppVeyor/Codespaces/GitHub-Actions detection. A typo in a config filename therefore produces confusing results rather than an error — worth checking first when instances look wrong.
 
-Two config generations coexist:
+`TestConfig_remote_instances.ps1` uses the instance names `InstanceSingle`, `InstanceMulti1/2`, `InstanceCopy1/2`, `InstanceHadr`, `InstanceRestart`. These are the same keys the CI matrix in `dbatools\.github\workflows\ci-azure.yml` sets per lane, and they map onto the scenario groups in `dbatools\tests\pester.groups.ps1`, which `run_tests.ps1 -Scenario` uses via `Get-TestsForScenario`. Several entries deliberately point at the same instance. This file holds the lab description (shares, clusters, Azure, expectations) plus the default set of roles, which is `set03`. The other sets - `TestConfig_remote_set04.ps1`, `TestConfig_remote_setFCI.ps1` and the alias `TestConfig_remote_set03.ps1` - dot-source it and override only the roles and `Temp`. Each set lives on one host (SQL03, SQL04, or CLUSTER01 plus SQL03), so that two of them can run side by side; the header of the base file lists them and the rules.
 
-- `TestConfig_remote_instances.ps1` — current naming: `InstanceSingle`, `InstanceMulti1/2`, `InstanceCopy1/2`, `InstanceHadr`, `InstanceRestart`. These are the same keys the CI matrix in `dbatools\.github\workflows\ci-azure.yml` sets per lane, and they map onto the scenario groups in `dbatools\tests\pester.groups.ps1`, which `run_tests.ps1 -Scenario` uses via `Get-TestsForScenario`. Several entries deliberately point at the same instance. This file holds the lab description (shares, clusters, Azure, expectations) plus the default set of roles, which is `set03`. The other sets - `TestConfig_remote_set04.ps1`, `TestConfig_remote_setFCI.ps1` and the alias `TestConfig_remote_set03.ps1` - dot-source it and override only the roles and `Temp`. Each set lives on one host (SQL03, SQL04, or CLUSTER01 plus SQL03), so that two of them can run side by side; the header of the base file lists them and the rules.
-- `TestConfig_local_instances.ps1` — older naming: `instance1/2/3` on one host, plus `SqlCred`, `instance2_detailed`, and commented-out Azure/SSIS entries. The local install/uninstall scripts use this generation.
+It detects the SQL Server source media location by probing paths (`C:\SQLServerFull` on an Azure image, or shares on `\\dc`), and carries the expectations that `TestEnvironment.Tests.ps1` asserts against: `ExpectedTcpPort`, `HadrInstances` and `AgCertificateInstances`. Those must be kept in step with what `06_configure_instances.ps1` actually configures.
 
-Both detect the SQL Server source media location by probing paths (`C:\SQLServerFull` on an Azure image, or shares on `\\dc`), and both carry the expectations that `TestEnvironment.Tests.ps1` asserts against: `ExpectedTcpPort`, `HadrInstances` and `AgCertificateInstances`. Those must be kept in step with what `06_configure_instances.ps1` (remote) or `install_local_instances.ps1` (local) actually configures.
-
-Anything that discovers instances — the environment test, `Reset-TestEnvironment.ps1`, `Initialize-LabSession.ps1` — derives them from the `Instance*` properties of the loaded config rather than hard-coding names, so both generations work.
+Anything that discovers instances — the environment test, `Reset-TestEnvironment.ps1`, `Initialize-LabSession.ps1` — derives them from the `Instance*` properties of the loaded config rather than hard-coding names.
 
 ## Lab building scripts
 
@@ -153,8 +145,7 @@ Two independent lab flavours; pick one, they are not meant to be combined.
 
 **Single-machine / Azure lab (older, config-driven):**
 
-- `setup_azure.ps1` — creates the resource group, key vault + self-signed cert, vnet/NSG (RDP + WinRM opened to the caller's current public IP only), a SQL Server VM image, installs modules and chocolatey packages over WinRM, clones the three GitHub repos, then opens RDP. Rerunnable with `-Continue`.
-- `install_local_instances.ps1` / `uninstall_local_instances.ps1` — install or remove `instance1/2/3` on the local machine via `Install-DbaInstance`, then apply the extra configuration the tests assume: master key, CLR, EKM cryptographic provider, Hadr + `dbatoolsci_AGCert`, static ports 14333/14334. Installs may require a reboot and the script tells you to rerun after restarting.
+- `setup_azure.ps1` — creates the resource group, key vault + self-signed cert, vnet/NSG (RDP + WinRM opened to the caller's current public IP only), a SQL Server VM image, installs modules and chocolatey packages over WinRM, clones the three GitHub repos, then opens RDP. Rerunnable with `-Continue`. The scripts that installed and configured instances on that machine (`install_local_instances.ps1`, `uninstall_local_instances.ps1`) and their configuration with the old `instance1/2/3` names (`TestConfig_local_instances.ps1`) were removed on 2026-11-24 and are in the git history.
 
 **Multi-machine domain lab (current, numbered scripts run in order):**
 

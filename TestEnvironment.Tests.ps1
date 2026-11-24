@@ -5,14 +5,11 @@ param(
 )
 
 BeforeDiscovery {
-    # Test every instance the loaded configuration knows about.
-    # This supports both configuration generations: the current names
-    # (InstanceSingle, InstanceMulti1, ...) and the legacy instance1/2/3.
+    # Test every instance the loaded configuration knows about (InstanceSingle, InstanceMulti1, ...).
     # Several configuration entries usually point at the same instance,
     # so we sort them unique to test each instance only once.
-    $excludedKeys = 'InstanceConfiguration', 'instance2_detailed'
     $instance = $TestConfig.PSObject.Properties |
-        Where-Object { $_.Name -match '^Instance' -and $_.Name -notin $excludedKeys -and $_.Value -is [string] -and $_.Value } |
+        Where-Object { $_.Name -match '^Instance' -and $_.Name -ne 'InstanceConfiguration' -and $_.Value -is [string] -and $_.Value } |
         ForEach-Object { $_.Value } |
         Sort-Object -Unique
 

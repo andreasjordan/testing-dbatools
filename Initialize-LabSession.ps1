@@ -49,5 +49,5 @@ Write-Host "dbatools $((Get-Module -Name dbatools).Version) imported from $((Get
 Write-Host "Configuration loaded from $configFile"
 Write-Host "Configured instances:"
 $TestConfig.PSObject.Properties |
-    Where-Object { $_.Name -match '^Instance' -and $_.Name -notin 'InstanceConfiguration', 'instance2_detailed' -and $_.Value -is [string] -and $_.Value } |
+    Where-Object { $_.Name -match '^Instance' -and $_.Name -ne 'InstanceConfiguration' -and $_.Value -is [string] -and $_.Value } |
     ForEach-Object { "    {0,-16} {1}" -f $_.Name, $_.Value }

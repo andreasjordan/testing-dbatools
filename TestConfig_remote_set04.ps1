@@ -13,15 +13,16 @@
 # run beside another set because they spread over SQL03 and SQL04.
 #
 # THIS SET NEEDS LAB PREPARATION, done on 2026-09-19 and part of 06_configure_instances.ps1 since then
-# (SQL04\SQL2022 in -HadrInstances, SQL04\SQL2019 in -StaticPorts). On a rebuilt lab either run
+# (SQL04\SQL2022 in -HadrInstances and -AgCertificateInstances, SQL04\SQL2019 in -StaticPorts). On a rebuilt lab either run
 # 06_configure_instances.ps1 or do it by hand:
 #
 #     $null = Enable-DbaAgHadr -SqlInstance "SQL04\SQL2022" -Force
 #     $null = Copy-DbaDbCertificate -Source "SQL03\SQL2025" -Destination "SQL04\SQL2022" -Certificate dbatoolsci_AGCert -SharedPath \\fs\Temp -Confirm:$false
 #     $null = Set-DbaNetworkConfiguration -SqlInstance "SQL04\SQL2019" -StaticPortForIPAll 14334 -RestartService -Confirm:$false
 #
-# SQL04\SQL2025 stays Hadr enabled with the AG certificate although it is InstanceSingle here: nothing in this set
-# restarts it (the Hadr role is on SQL04\SQL2022), and a master certificate does not disturb the Single tests.
+# SQL04\SQL2025 stays Hadr enabled although it is InstanceSingle here: nothing in this set restarts it (the Hadr
+# role is on SQL04\SQL2022). It has no AG certificate since 2026-09-20, because a second certificate in master broke
+# every Single test that creates a database encryption key or an encrypted backup without naming a certificate.
 #
 # Runs beside set03 or setFCI only with -ExcludeScenario HADR on one of the two, because all three have their Hadr
 # instance in CLUSTER02 - see the rules in TestConfig_remote_instances.ps1.

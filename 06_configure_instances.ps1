@@ -1,9 +1,14 @@
 [CmdletBinding()]
 param (
     [string[]]$SqlInstances = @('FCI01', 'FCI02\SQL2022', 'SQL03\SQL2025', 'SQL03\SQL2022', 'SQL03\SQL2019', 'SQL04\SQL2025', 'SQL04\SQL2022', 'SQL04\SQL2019'),
-    # The first one gets the AG certificate, every other one a copy of it. A single instance is fine.
     # SQL04\SQL2022 is the Hadr instance of TestConfig_remote_set04.ps1 since 2026-09-19.
     [string[]]$HadrInstances = @('SQL03\SQL2025', 'SQL04\SQL2025', 'SQL04\SQL2022'),
+    # The first one gets the AG certificate, every other one a copy of it. A single instance is fine.
+    # SQL04\SQL2025 is Hadr enabled but has no AG certificate since 2026-09-20: it is the InstanceSingle of
+    # TestConfig_remote_set04.ps1, and a second certificate in master broke every test there that creates a
+    # database encryption key or an encrypted backup without naming a certificate.
+    # TestConfig_remote_instances.ps1 lists the same instances as AgCertificateInstances.
+    [string[]]$AgCertificateInstances = @('SQL03\SQL2025', 'SQL04\SQL2022'),
     # Instances whose service configuration the RESTART tests change need a static port, so that
     # Set-DbaTcpPort.Tests.ps1 can put it back. TestConfig_remote_instances.ps1 lists the same ports.
     [hashtable]$StaticPorts = @{ 'SQL03\SQL2022' = 14333; 'SQL04\SQL2019' = 14334 },
@@ -36,9 +41,13 @@ Invoke-DbaQuery -SqlInstance $SqlInstances -Query "CREATE CRYPTOGRAPHIC PROVIDER
 if ($HadrInstances) {
     Write-PSFMessage -Level Host -Message 'Configuration for Availability Group tests'
     $null = Enable-DbaAgHadr -SqlInstance $HadrInstances -Force
-    $null = New-DbaDbCertificate -SqlInstance $HadrInstances[0] -Name dbatoolsci_AGCert -Subject 'AG Certificate'
-    foreach ($hadrReplica in ($HadrInstances | Select-Object -Skip 1)) {
-        $null = Copy-DbaDbCertificate -Source $HadrInstances[0] -Destination $hadrReplica -Certificate dbatoolsci_AGCert -SharedPath \\fs\Temp -Confirm:$false
+}
+
+if ($AgCertificateInstances) {
+    Write-PSFMessage -Level Host -Message 'Creating the AG certificate'
+    $null = New-DbaDbCertificate -SqlInstance $AgCertificateInstances[0] -Name dbatoolsci_AGCert -Subject 'AG Certificate'
+    foreach ($agCertificateReplica in ($AgCertificateInstances | Select-Object -Skip 1)) {
+        $null = Copy-DbaDbCertificate -Source $AgCertificateInstances[0] -Destination $agCertificateReplica -Certificate dbatoolsci_AGCert -SharedPath \\fs\Temp -Confirm:$false
     }
 }
 

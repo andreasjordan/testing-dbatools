@@ -24,8 +24,9 @@
 #
 # RULES EVERY SET OBEYS:
 #   - InstanceSingle is never InstanceHadr and nothing restarts it. On 2026-08-31 Enable-DbaAgHadr restarted the
-#     Single instance and the connection pool of the run never recovered. A Single instance that is Hadr enabled and
-#     carries the AG certificate is fine: setB ran that way, and Enable-DbaDbEncryption takes any master certificate.
+#     Single instance and the connection pool of the run never recovered. A Single instance that is Hadr enabled is
+#     fine, but it must not carry the AG certificate: with a second certificate in master, every test that creates a
+#     database encryption key or an encrypted backup without naming a certificate fails (seven files on 2026-09-20).
 #   - InstanceCopy1 is never an FCI (Copy-DbaDbMail) and never newer than InstanceCopy2 (Test-DbaMigrationConstraint).
 #   - InstanceRestart is standalone and has a static port, so that Set-DbaTcpPort.Tests.ps1 can put it back.
 #   - Every set has its own temp folder below \\fs\Temp. Two runs started together stay in lockstep for the whole

@@ -21,7 +21,13 @@ $ErrorActionPreference = 'Stop'
 
 $testingBase = 'C:\GitHub\testing-dbatools'
 
+# The session setup imports dbatools, and under -WhatIf the import would only pretend to add the type data
+# and the aliases of the module. The first command that needs them (Get-DbaDatabase calls the Query method
+# of the server object) would then fail, so the setup runs without -WhatIf and the removals below keep it.
+$whatIfRequested = $WhatIfPreference
+$WhatIfPreference = $false
 . "$testingBase\Initialize-LabSession.ps1" -ConfigFilename $ConfigFilename
+$WhatIfPreference = $whatIfRequested
 
 $instances = $TestConfig.PSObject.Properties |
     Where-Object { $_.Name -match '^Instance' -and $_.Name -ne 'InstanceConfiguration' -and $_.Value -is [string] -and $_.Value } |

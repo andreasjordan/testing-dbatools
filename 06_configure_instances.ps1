@@ -27,9 +27,9 @@ Write-PSFMessage -Level Host -Message 'Enabling remote DAC'
 $null = Set-DbaSpConfigure -SqlInstance $SqlInstances -Name RemoteDacConnectionsEnabled -Value $true
 
 Write-PSFMessage -Level Host -Message "Setting max server memory"
-# A host has 2 GB for three instances, so no instance may take all of it. The installation leaves the
-# setting unlimited; TestEnvironment.Tests.ps1 checks the value.
-$null = Set-DbaMaxMemory -SqlInstance $SqlInstances -Max 1024
+# A host has 3 GB for three instances, so no instance may take all of it: three times 768 MB leaves Windows
+# 768 MB. The installation leaves the setting unlimited; TestEnvironment.Tests.ps1 checks the value.
+$null = Set-DbaMaxMemory -SqlInstance $SqlInstances -Max 768
 
 Write-PSFMessage -Level Host -Message 'Creating master key'
 Invoke-DbaQuery -SqlInstance $SqlInstances -Query "CREATE MASTER KEY ENCRYPTION BY PASSWORD = '<StrongPassword>'"

@@ -172,11 +172,11 @@ WHERE d.name IN (N'master', N'model', N'msdb')
     }
 
     It "Has the max server memory of the lab" {
-        # 06_configure_instances.ps1 sets 1024 MB on every instance: a host has 2 GB for three instances, so no
+        # 06_configure_instances.ps1 sets 768 MB on every instance: a host has 3 GB for three instances, so no
         # instance may take all of it. Found 2026-10-18: Get-DbaMaxMemory.Tests.ps1 set the Multi instances to
         # 1024 without restoring them, while the Single instances kept the unlimited default of the installation,
         # so the lab ran with two different settings for weeks and nothing noticed.
-        $server.Configuration.MaxServerMemory.ConfigValue | Should -Be 1024
+        $server.Configuration.MaxServerMemory.ConfigValue | Should -Be 768
     }
 
     It "Has the correct TCP port configured" {

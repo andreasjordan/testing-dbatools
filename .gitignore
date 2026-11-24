@@ -1,3 +1,6 @@
 # Keep logs local
 logs/*
 !logs/README.md
+
+# Claude Code settings of this machine (backed up by claude-memory\sync-memory.ps1)
+.claude/settings.local.json

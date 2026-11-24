@@ -9,7 +9,6 @@
 #
 #   set03   SQL03:            Single SQL03\SQL2019, Multi1/Copy2/Hadr SQL03\SQL2025, Multi2/Copy1/Restart SQL03\SQL2022
 #   set04   SQL04:            Single SQL04\SQL2025, Multi1/Copy2/Hadr SQL04\SQL2022, Multi2/Copy1/Restart SQL04\SQL2019
-#   setCS   SQL05:            Single SQL05\SQL2019, Multi1/Copy2/Hadr SQL05\SQL2025, Multi2/Copy1/Restart SQL05\SQL2022
 #   setFCI  CLUSTER01, SQL03: Single FCI01, Multi2 FCI02\SQL2022, Copy2 FCI01,
 #                             Multi1/Hadr SQL03\SQL2025, Copy1/Restart SQL03\SQL2022
 #
@@ -18,10 +17,10 @@
 #      -ComputerName. So set03 and setFCI never run together.
 #   2. Only one of the two may have its Hadr instance on a node of CLUSTER02 (SQL03 and SQL04): the Hadr tests create
 #      availability groups with fixed names, an availability group is a cluster group, and two runs collide inside
-#      the cluster. SQL05 is not clustered, so setCS pairs with every other set. set03 or setFCI beside set04 works
-#      only when one of them runs with -ExcludeScenario HADR and its Hadr lane runs afterwards (23 files, 15 minutes).
+#      the cluster. set03 or setFCI beside set04 works only when one of them runs with -ExcludeScenario HADR and its
+#      Hadr lane runs afterwards (23 files, 15 minutes).
 #   3. ADMIN01 has 12 GB and a full run peaks at about 3.5 GB, so two runs fit and three do not.
-# Two waves cover the whole lab: set03 beside setCS, then setFCI beside set04 (one of them without HADR).
+# The whole lab takes set03 beside set04 with -ExcludeScenario HADR, then set04 -Scenario HADR, then setFCI.
 #
 # RULES EVERY SET OBEYS:
 #   - InstanceSingle is never InstanceHadr and nothing restarts it. On 2026-08-31 Enable-DbaAgHadr restarted the
@@ -69,18 +68,15 @@ $config['ClusterWitnessNodes'] = @(
 $config['ExpectedTcpPort'] = @{
     "SQL03\SQL2022" = 14333
     "SQL04\SQL2019" = 14334
-    "SQL05\SQL2022" = 14335
 }
 $config['HadrInstances'] = @(
     "SQL03\SQL2025"
     "SQL04\SQL2025"
     "SQL04\SQL2022"
-    "SQL05\SQL2025"
 )
 $config['AgCertificateInstances'] = @(
     "SQL03\SQL2025"
     "SQL04\SQL2022"
-    "SQL05\SQL2025"
 )
 
 # The Azure SQL Database that the Azure code paths of Connect-DbaInstance need. Azure SQL Database is

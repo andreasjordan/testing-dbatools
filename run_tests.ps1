@@ -35,7 +35,7 @@ $configFile = "$testingBase\$ConfigFilename"
 $logPath    = "$testingBase\logs"
 
 # One stamp per run: the result file and every warnings file of this run carry it, so two runs started
-# side by side (say setC and setCS) never write to the same file, and a kept warnings file can be
+# side by side (say set03 and set04) never write to the same file, and a kept warnings file can be
 # attributed to its run afterwards.
 $runStamp = [datetime]::Now.ToString("yyyyMMdd_HHmmss")
 # The scenario part of the file name says what was filtered: "HADR", "notHADR" or nothing.

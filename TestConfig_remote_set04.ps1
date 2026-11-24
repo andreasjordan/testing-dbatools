@@ -23,8 +23,8 @@
 # SQL04\SQL2025 stays Hadr enabled with the AG certificate although it is InstanceSingle here: nothing in this set
 # restarts it (the Hadr role is on SQL04\SQL2022), and a master certificate does not disturb the Single tests.
 #
-# Runs beside setCS without restrictions. Beside set03 or setFCI only with -ExcludeScenario HADR on one of the two,
-# because all three have their Hadr instance in CLUSTER02 - see the rules in TestConfig_remote_instances.ps1.
+# Runs beside set03 or setFCI only with -ExcludeScenario HADR on one of the two, because all three have their Hadr
+# instance in CLUSTER02 - see the rules in TestConfig_remote_instances.ps1.
 #
 # The SQL Server source paths, the appveyor lab repository, the cluster and Azure settings and the lab expectations
 # come from the main configuration, which is dot-sourced first. Only the roles and the temp folder differ.

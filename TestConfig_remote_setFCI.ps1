@@ -12,7 +12,8 @@
 #     produces FCI-shaped noise, fall back to SQL03\SQL2025 and this set stays host-local all the same.
 #
 # This was "setC" until 2026-09-19. The SQL04 dependency (InstanceCopy2) is gone, so this set uses the cluster
-# and SQL03 only and can run beside set04 or setCS. It shares SQL03 with set03, so those two never run together.
+# and SQL03 only and can run beside set04, with -ExcludeScenario HADR on one of the two (both have their Hadr
+# instance in CLUSTER02). It shares SQL03 with set03, so those two never run together.
 #
 # Needs no lab preparation: both FCIs are configured by 06_configure_instances.ps1 and their default backup
 # folder is reachable through the admin share of the cluster network name (\\FCI01\S$\... and \\FCI02\T$\...).

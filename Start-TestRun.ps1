@@ -1,7 +1,7 @@
 # Starts one full test run per instance set, side by side, each in its own PowerShell process.
 #
 # Examples:
-#     .\Start-TestRun.ps1 -ConfigFilename TestConfig_remote_set03.ps1, TestConfig_remote_setCS.ps1 -Edition Desktop, Core -ContinueOnFailure -TestForWarnings
+#     .\Start-TestRun.ps1 -ConfigFilename TestConfig_remote_set03.ps1, TestConfig_remote_set04.ps1 -ExcludeScenario '', HADR -Edition Desktop, Core -ContinueOnFailure -TestForWarnings
 #     .\Start-TestRun.ps1 -ConfigFilename TestConfig_remote_setFCI.ps1, TestConfig_remote_set04.ps1 -ExcludeScenario '', HADR -ContinueOnFailure -TestForWarnings
 #     .\Start-TestRun.ps1 -ConfigFilename TestConfig_remote_set04.ps1 -Scenario HADR -ContinueOnFailure -TestForWarnings
 #     .\Start-TestRun.ps1 -ConfigFilename TestConfig_remote_set03.ps1, TestConfig_remote_setFCI.ps1 -WhatIf   # refused: both on SQL03

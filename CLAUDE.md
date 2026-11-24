@@ -166,9 +166,10 @@ Two independent lab flavours; pick one, they are not meant to be combined.
 | `04_install_alwayson_fci2.ps1` | FCI `FCI02\SQL2022` on CLUSTER01 |
 | `05_install_remote_instances.ps1` | Standalone instances SQL2025/2022/2019 on SQL03 and SQL04 |
 | `06_configure_instances.ps1` | Post-install config across all instances: remote DAC, master key, EKM provider, Hadr + AG certificate, static port |
+| `07_configure_certificate_authority.ps1` | What the lab CA needs beyond the AutomatedLab role `CaRoot`: the flag `EDITF_ATTRIBUTEENDDATE` (short-lived certificates) and the template `WebServerPendingApproval` (requests held as pending) |
 | `c2_remove.ps1`, `c3_remove.ps1` | Remove FCI nodes (`ACTION = RemoveNode`) to tear a cluster instance back down |
 
-Scripts 02–06 take everything as parameters with defaults; 01 uses an inline `$config` hashtable instead. They log progress with `Write-PSFMessage -Level Host` and `throw` on failure. Domain names, IPs, the `ORDIX\Admin` credential and the `ORDIX\gMSA-SQLServer$` service account are hard-coded — adapt them for another environment.
+Scripts 02–07 take everything as parameters with defaults; 01 uses an inline `$config` hashtable instead. They log progress with `Write-PSFMessage -Level Host` and `throw` on failure. Domain names, IPs, the `ORDIX\Admin` credential and the `ORDIX\gMSA-SQLServer$` service account are hard-coded — adapt them for another environment.
 
 ## Test-shape enforcement scripts
 

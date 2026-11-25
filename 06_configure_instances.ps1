@@ -14,7 +14,9 @@ param (
     [hashtable]$StaticPorts = @{ 'SQL03\SQL2022' = 14333; 'SQL04\SQL2019' = 14334 },
     # Hosts whose local account lockout threshold is verified after the policy has been applied.
     # The policy itself is linked to the OU, so every host in it gets the threshold either way.
-    [string[]]$LockoutComputers = @('SQL03', 'SQL04')
+    # SQL01 and SQL02 are the nodes of FCI01, the InstanceSingle of TestConfig_remote_setFCI.ps1, on which
+    # Set-DbaLogin.Tests.ps1 locks out a login.
+    [string[]]$LockoutComputers = @("SQL01", "SQL02", "SQL03", "SQL04")
 )
 
 $ErrorActionPreference = 'Stop'

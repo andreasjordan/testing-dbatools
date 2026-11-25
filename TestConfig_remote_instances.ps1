@@ -19,8 +19,11 @@
 #      availability groups with fixed names, an availability group is a cluster group, and two runs collide inside
 #      the cluster. set03 or setFCI beside set04 works only when one of them runs with -ExcludeScenario HADR and its
 #      Hadr lane runs afterwards (23 files, 15 minutes).
-#   3. ADMIN01 has 9 GB and a full run peaks at about 3.5 GB, so two runs fit and three do not.
-# The whole lab takes set03 beside set04 with -ExcludeScenario HADR, then set04 -Scenario HADR, then setFCI.
+#   3. ADMIN01 has 9 GB and a full run on Windows PowerShell 5.1 peaks at about 5.8 GB (2026-11-25), so for now the
+#      sets run one after another, each in full: set03, set04, setFCI. Two side by side still finished that night,
+#      but they grew the page file from 2 to 6.3 GB. Start-TestRun.ps1 does not check this rule.
+# With room for two runs, the whole lab takes set03 beside set04 with -ExcludeScenario HADR, then set04 -Scenario
+# HADR, then setFCI.
 #
 # RULES EVERY SET OBEYS:
 #   - InstanceSingle is never InstanceHadr and nothing restarts it. On 2026-08-31 Enable-DbaAgHadr restarted the

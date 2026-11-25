@@ -181,12 +181,15 @@ if ($CommandToStartWith) {
     }
 }
 
-$tests = $tests | Select-Object -First $NumberOfTestsToTest -Skip $NumberOfTestsToSkip
-
+# Reversed before the files to skip and to test are counted, so that both count from where the run starts. Counted
+# first, a reversed run with -CommandToStartWith and -NumberOfTestsToTest ran the first files from the A end instead of
+# the files from the command downwards.
 if ($ReverseOrder) {
     $tests = @($tests)
     [array]::Reverse($tests)
 }
+
+$tests = $tests | Select-Object -First $NumberOfTestsToTest -Skip $NumberOfTestsToSkip
 
 #$ProgressPreference = 'SilentlyContinue'
 #Get-Date
